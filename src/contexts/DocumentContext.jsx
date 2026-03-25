@@ -56,32 +56,37 @@ export function DocumentProvider({ children }) {
     return () => unsubscribe()
   }, [])
 
-  useEffect(() => {
-    if (!accessToken) return
-    let cancelled = false
-
-    async function loadFromDrive() {
-      setDriveLoading(true)
-      setDriveError(null)
-      try {
-        const { documents: driveDocs, categories } = await discoverAllDriveContent(accessToken)
-        if (cancelled) return
-        if (driveDocs.length > 0) {
-          setDocuments(driveDocs)
-          setDriveCategories(categories)
-        } else {
-          setDriveError('ไม่พบไฟล์ใน Google Drive — ลอง logout แล้ว login ใหม่ แล้วกด Allow ให้สิทธิ์อ่าน Drive')
-        }
-      } catch (err) {
-        console.error('Drive error:', err)
-        if (!cancelled) setDriveError('ไม่สามารถโหลดไฟล์จาก Google Drive: ' + (err.message || ''))
+  // Load files from Drive — reusable for both initial load and manual refresh
+  const loadFromDrive = useCallback(async (token) => {
+    if (!token) return
+    setDriveLoading(true)
+    setDriveError(null)
+    try {
+      const { documents: driveDocs, categories } = await discoverAllDriveContent(token)
+      if (driveDocs.length > 0) {
+        setDocuments(driveDocs)
+        setDriveCategories(categories)
+      } else {
+        setDriveError('ไม่พบไฟล์ใน Google Drive — กดปุ่ม "เชื่อมต่อ Drive" เพื่อลองใหม่')
       }
-      if (!cancelled) setDriveLoading(false)
+    } catch (err) {
+      console.error('Drive error:', err)
+      setDriveError('ไม่สามารถโหลดไฟล์จาก Google Drive — กดปุ่ม "เชื่อมต่อ Drive" เพื่อลองใหม่')
     }
+    setDriveLoading(false)
+  }, [])
 
-    loadFromDrive()
-    return () => { cancelled = true }
-  }, [accessToken])
+  // Auto-load on token change
+  useEffect(() => {
+    if (accessToken) loadFromDrive(accessToken)
+  }, [accessToken, loadFromDrive])
+
+  // Manual refresh — reload files from Drive
+  const refreshDriveData = useCallback(async () => {
+    if (accessToken) {
+      await loadFromDrive(accessToken)
+    }
+  }, [accessToken, loadFromDrive])
 
   const categories = driveCategories.map((cat, index) => ({
     ...cat,
@@ -264,7 +269,7 @@ export function DocumentProvider({ children }) {
   return (
     <DocumentContext.Provider value={{
       documents, categories, onboardingSteps, searchQuery, setSearchQuery,
-      driveLoading, driveError,
+      driveLoading, driveError, refreshDriveData,
       getDocumentsByCategory, getDocumentById, getRecentDocuments,
       getCategoryFileCount, getCategoryLastUpdated, searchDocuments,
       addDocument, updateDocument, deleteDocument, uploadFile,

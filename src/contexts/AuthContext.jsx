@@ -1,13 +1,42 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut, GoogleAuthProvider } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db, googleProvider, isAllowedDomain } from '../lib/firebase'
 
 const AuthContext = createContext(null)
+const TOKEN_KEY = 'hh_drive_token'
+const TOKEN_EXPIRY_KEY = 'hh_drive_token_expiry'
+
+function saveToken(token) {
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token)
+    // Google OAuth tokens last ~1 hour
+    sessionStorage.setItem(TOKEN_EXPIRY_KEY, String(Date.now() + 55 * 60 * 1000))
+  } catch { /* sessionStorage unavailable */ }
+}
+
+function loadToken() {
+  try {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    const expiry = Number(sessionStorage.getItem(TOKEN_EXPIRY_KEY) || 0)
+    if (token && Date.now() < expiry) return token
+    // Expired — clear
+    sessionStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
+  } catch { /* ignore */ }
+  return null
+}
+
+function clearToken() {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
+  } catch { /* ignore */ }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [accessToken, setAccessToken] = useState(null)
+  const [accessToken, setAccessToken] = useState(loadToken())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -15,7 +44,6 @@ export function AuthProvider({ children }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         if (isAllowedDomain(firebaseUser.email)) {
-          // Save/update user profile in Firestore
           try {
             const userRef = doc(db, 'users', firebaseUser.uid)
             const userSnap = await getDoc(userRef)
@@ -31,7 +59,6 @@ export function AuthProvider({ children }) {
               userData.created_at = new Date().toISOString()
             }
             await setDoc(userRef, userData, { merge: true })
-
             const role = userSnap.exists() ? userSnap.data().role : 'staff'
             setUser({
               uid: firebaseUser.uid,
@@ -57,10 +84,10 @@ export function AuthProvider({ children }) {
       } else {
         setUser(null)
         setAccessToken(null)
+        clearToken()
       }
       setLoading(false)
     })
-
     return () => unsubscribe()
   }, [])
 
@@ -68,10 +95,10 @@ export function AuthProvider({ children }) {
     setError(null)
     try {
       const result = await signInWithPopup(auth, googleProvider)
-      // Get Google OAuth access token for Drive API
       const credential = GoogleAuthProvider.credentialFromResult(result)
       if (credential?.accessToken) {
         setAccessToken(credential.accessToken)
+        saveToken(credential.accessToken)
       }
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
@@ -80,13 +107,31 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // Re-authenticate to get a fresh token (e.g. when token expired)
+  const refreshToken = useCallback(async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      const credential = GoogleAuthProvider.credentialFromResult(result)
+      if (credential?.accessToken) {
+        setAccessToken(credential.accessToken)
+        saveToken(credential.accessToken)
+        return credential.accessToken
+      }
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setError('ไม่สามารถรีเฟรช token ได้ — กรุณา login ใหม่')
+      }
+    }
+    return null
+  }, [])
+
   async function signOut() {
     await firebaseSignOut(auth)
     setUser(null)
     setAccessToken(null)
+    clearToken()
   }
 
-  // For demo/development: allow bypassing auth
   function devSignIn() {
     setUser({
       uid: 'dev-user',
@@ -100,9 +145,13 @@ export function AuthProvider({ children }) {
   }
 
   const isAdmin = user?.role === 'admin' || user?.uid === 'dev-user'
+  const tokenExpired = user && !accessToken && user.uid !== 'dev-user'
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, error, isAdmin, signInWithGoogle, signOut, devSignIn }}>
+    <AuthContext.Provider value={{
+      user, accessToken, loading, error, isAdmin, tokenExpired,
+      signInWithGoogle, signOut, devSignIn, refreshToken,
+    }}>
       {children}
     </AuthContext.Provider>
   )

@@ -4,7 +4,7 @@ import { useDocuments } from '../contexts/DocumentContext'
 import { useAuth } from '../contexts/AuthContext'
 import FilePreviewModal from '../components/FilePreviewModal'
 import {
-  Search, FolderOpen, Clock, Star, ArrowRight,
+  Search, FolderOpen, Clock, Star, ArrowRight, RefreshCw, Plug,
   FileText, Table, Presentation, FileDown, Image, Video, ExternalLink,
 } from 'lucide-react'
 
@@ -29,10 +29,10 @@ function timeAgo(dateString) {
 }
 
 export default function HomePage() {
-  const { user } = useAuth()
+  const { user, accessToken, tokenExpired, refreshToken } = useAuth()
   const {
     categories, documents, getRecentDocuments,
-    driveLoading, driveError, getBookmarkedDocs, trackView,
+    driveLoading, driveError, getBookmarkedDocs, trackView, refreshDriveData,
   } = useDocuments()
   const [previewDoc, setPreviewDoc] = useState(null)
   const [searchInput, setSearchInput] = useState('')
@@ -85,16 +85,46 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Status */}
+      {/* Status & Actions */}
       {driveLoading && (
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 flex items-center gap-3">
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary-500 border-t-transparent" />
           <p className="text-sm text-primary-700">กำลังโหลดไฟล์จาก Google Drive...</p>
         </div>
       )}
-      {driveError && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-sm text-red-700">{driveError}</p>
+
+      {/* Token expired or no Drive access — show reconnect button */}
+      {!driveLoading && (tokenExpired || driveError) && (
+        <button
+          onClick={async () => {
+            const newToken = await refreshToken()
+            if (newToken) refreshDriveData()
+          }}
+          className="w-full flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl p-4 hover:bg-amber-100 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <Plug className="w-5 h-5 text-amber-500" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-amber-800">
+                {driveError ? 'โหลดไฟล์ไม่สำเร็จ' : 'ยังไม่ได้เชื่อมต่อ Google Drive'}
+              </p>
+              <p className="text-xs text-amber-600 mt-0.5">กดที่นี่เพื่อเชื่อมต่อและโหลดไฟล์จาก Drive</p>
+            </div>
+          </div>
+          <RefreshCw className="w-5 h-5 text-amber-400 group-hover:text-amber-600" />
+        </button>
+      )}
+
+      {/* Refresh button when data is loaded */}
+      {!driveLoading && accessToken && !driveError && totalFiles > 0 && (
+        <div className="flex justify-end">
+          <button
+            onClick={refreshDriveData}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-primary-600 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            รีเฟรชข้อมูล
+          </button>
         </div>
       )}
 
