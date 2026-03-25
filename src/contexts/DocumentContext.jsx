@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { useAuth } from './AuthContext'
 import { discoverAllDriveContent, searchDriveFiles } from '../lib/drive'
+import * as prefs from '../lib/userPrefs'
 
 const DocumentContext = createContext(null)
 
@@ -27,6 +28,9 @@ export function DocumentProvider({ children }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [driveLoading, setDriveLoading] = useState(false)
   const [driveError, setDriveError] = useState(null)
+  const [bookmarks, setBookmarks] = useState(prefs.getBookmarks())
+  const [recentlyViewed, setRecentlyViewed] = useState(prefs.getRecentlyViewed())
+  const [documentTags, setDocumentTags] = useState(prefs.getAllTags())
 
   useEffect(() => {
     if (!accessToken) return
@@ -105,11 +109,34 @@ export function DocumentProvider({ children }) {
     if (filters.category) results = results.filter((d) => d.category_id === filters.category)
     if (filters.fileType) results = results.filter((d) => d.file_type === filters.fileType)
     if (filters.includeArchived !== true) results = results.filter((d) => !d.is_archived)
+    if (filters.uploader) {
+      const ul = filters.uploader.toLowerCase()
+      results = results.filter((d) =>
+        (d.uploader_name && d.uploader_name.toLowerCase().includes(ul)) ||
+        (d.uploaded_by && d.uploaded_by.toLowerCase().includes(ul))
+      )
+    }
+    if (filters.dateFrom) {
+      const from = new Date(filters.dateFrom)
+      results = results.filter((d) => new Date(d.updated_at) >= from)
+    }
+    if (filters.dateTo) {
+      const to = new Date(filters.dateTo)
+      to.setHours(23, 59, 59, 999)
+      results = results.filter((d) => new Date(d.updated_at) <= to)
+    }
+    if (filters.tag) {
+      const docIds = prefs.getDocIdsByTag(filters.tag)
+      results = results.filter((d) => docIds.includes(d.id))
+    }
+    if (filters.bookmarkedOnly) {
+      results = results.filter((d) => bookmarks.includes(d.id))
+    }
     if (filters.sort === 'oldest') results.sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at))
     else if (filters.sort === 'name') results.sort((a, b) => a.name.localeCompare(b.name))
     else results.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
     return results
-  }, [documents, accessToken])
+  }, [documents, accessToken, bookmarks])
 
   const addDocument = useCallback((docData) => {
     const newDoc = { ...docData, id: String(Date.now()), created_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_archived: false }
@@ -126,6 +153,61 @@ export function DocumentProvider({ children }) {
   }, [])
 
   const uploadFile = useCallback((file) => URL.createObjectURL(file), [])
+
+  // Bookmarks
+  const toggleBookmark = useCallback((docId) => {
+    const updated = prefs.toggleBookmark(docId)
+    setBookmarks([...updated])
+  }, [])
+
+  const isBookmarked = useCallback((docId) => {
+    return bookmarks.includes(docId)
+  }, [bookmarks])
+
+  const getBookmarkedDocs = useCallback(() => {
+    return documents.filter((d) => bookmarks.includes(d.id))
+  }, [documents, bookmarks])
+
+  // Recently viewed
+  const trackView = useCallback((docId) => {
+    const updated = prefs.addRecentlyViewed(docId)
+    setRecentlyViewed([...updated])
+  }, [])
+
+  const getRecentlyViewedDocs = useCallback((limit = 10) => {
+    return recentlyViewed
+      .slice(0, limit)
+      .map((id) => documents.find((d) => d.id === id))
+      .filter(Boolean)
+  }, [documents, recentlyViewed])
+
+  // Tags
+  const addTag = useCallback((docId, tag) => {
+    prefs.addTagToDoc(docId, tag)
+    setDocumentTags({ ...prefs.getAllTags() })
+  }, [])
+
+  const removeTag = useCallback((docId, tag) => {
+    prefs.removeTagFromDoc(docId, tag)
+    setDocumentTags({ ...prefs.getAllTags() })
+  }, [])
+
+  const getTagsForDoc = useCallback((docId) => {
+    return documentTags[docId] || []
+  }, [documentTags])
+
+  const getAllUniqueTags = useCallback(() => {
+    return prefs.getAllUniqueTags()
+  }, [documentTags])
+
+  // Unique uploaders for filter
+  const getAllUploaders = useCallback(() => {
+    const uploaders = new Set()
+    documents.forEach((d) => {
+      if (d.uploader_name) uploaders.add(d.uploader_name)
+    })
+    return [...uploaders].sort()
+  }, [documents])
 
   const addOnboardingStep = useCallback((step) => {
     setOnboardingSteps((prev) => [...prev, { ...step, id: String(Date.now()), display_order: prev.length + 1, is_active: true }])
@@ -147,6 +229,10 @@ export function DocumentProvider({ children }) {
       getDocumentsByCategory, getDocumentById, getRecentDocuments,
       getCategoryFileCount, getCategoryLastUpdated, searchDocuments,
       addDocument, updateDocument, deleteDocument, uploadFile,
+      toggleBookmark, isBookmarked, getBookmarkedDocs,
+      trackView, getRecentlyViewedDocs,
+      addTag, removeTag, getTagsForDoc, getAllUniqueTags,
+      getAllUploaders,
       addOnboardingStep, updateOnboardingStep, deleteOnboardingStep, reorderOnboardingSteps,
     }}>
       {children}
