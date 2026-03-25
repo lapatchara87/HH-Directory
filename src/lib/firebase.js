@@ -4,12 +4,13 @@ import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'demo-key',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'demo.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'demo-project',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'demo.appspot.com',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '000000000',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:000:web:000',
+  apiKey: "AIzaSyACZm_F4fjMDvp3KRLW9Omwx9noj7Ggu8k",
+  authDomain: "hhxfileindex.firebaseapp.com",
+  projectId: "hhxfileindex",
+  storageBucket: "hhxfileindex.firebasestorage.app",
+  messagingSenderId: "552275735152",
+  appId: "1:552275735152:web:774514602f9b6bae69fab5",
+  measurementId: "G-5QX705R5VG",
 }
 
 const app = initializeApp(firebaseConfig)
