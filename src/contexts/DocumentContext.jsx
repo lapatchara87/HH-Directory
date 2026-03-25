@@ -32,27 +32,36 @@ export function DocumentProvider({ children }) {
   const [driveError, setDriveError] = useState(null)
   const [bookmarks, setBookmarks] = useState(prefs.getBookmarks())
   const [recentlyViewed, setRecentlyViewed] = useState(prefs.getRecentlyViewed())
-  const [sharedTags, setSharedTags] = useState({}) // { docId: ['tag1', 'tag2'] } from Firestore
+  const [sharedTags, setSharedTags] = useState({})
+  const [tagsSource, setTagsSource] = useState('local') // 'firestore' | 'local'
 
-  // Listen to shared tags from Firestore (real-time, all users see same tags)
+  // Listen to shared tags from Firestore
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'document_tags'),
-      (snapshot) => {
-        const tags = {}
-        snapshot.docs.forEach((d) => {
-          const data = d.data()
-          if (data.tags && data.tags.length > 0) {
-            tags[d.id] = data.tags
-          }
-        })
-        setSharedTags(tags)
-      },
-      () => {
-        // Firestore not available — fall back to localStorage
-        setSharedTags(prefs.getAllTags())
-      }
-    )
+    let unsubscribe = () => {}
+    try {
+      unsubscribe = onSnapshot(
+        collection(db, 'document_tags'),
+        (snapshot) => {
+          const tags = {}
+          snapshot.docs.forEach((d) => {
+            const data = d.data()
+            if (data.tags && data.tags.length > 0) {
+              tags[d.id] = data.tags
+            }
+          })
+          setSharedTags(tags)
+          setTagsSource('firestore')
+        },
+        (err) => {
+          console.warn('Firestore tags listener error:', err.message)
+          setSharedTags(prefs.getAllTags())
+          setTagsSource('local')
+        }
+      )
+    } catch {
+      setSharedTags(prefs.getAllTags())
+      setTagsSource('local')
+    }
     return () => unsubscribe()
   }, [])
 
@@ -209,30 +218,39 @@ export function DocumentProvider({ children }) {
       .filter(Boolean)
   }, [documents, recentlyViewed])
 
-  // Tags — shared via Firestore (all users see same tags)
+  // Tags — shared via Firestore, with localStorage fallback
   const addTag = useCallback(async (docId, tag) => {
     const currentTags = sharedTags[docId] || []
-    if (!currentTags.includes(tag)) {
-      const newTags = [...currentTags, tag]
+    if (currentTags.includes(tag)) return
+    const newTags = [...currentTags, tag]
+
+    // Optimistic update
+    setSharedTags((prev) => ({ ...prev, [docId]: newTags }))
+    prefs.addTagToDoc(docId, tag) // Always save locally as backup
+
+    if (tagsSource === 'firestore') {
       try {
-        await setDoc(doc(db, 'document_tags', docId), { tags: newTags }, { merge: true })
-      } catch {
-        // Firestore unavailable — fall back to localStorage
-        prefs.addTagToDoc(docId, tag)
-        setSharedTags((prev) => ({ ...prev, [docId]: newTags }))
+        await setDoc(doc(db, 'document_tags', docId), { tags: newTags })
+      } catch (err) {
+        console.error('Failed to save tag to Firestore:', err.message)
       }
     }
-  }, [sharedTags])
+  }, [sharedTags, tagsSource])
 
   const removeTag = useCallback(async (docId, tag) => {
-    const currentTags = (sharedTags[docId] || []).filter((t) => t !== tag)
-    try {
-      await setDoc(doc(db, 'document_tags', docId), { tags: currentTags }, { merge: true })
-    } catch {
-      prefs.removeTagFromDoc(docId, tag)
-      setSharedTags((prev) => ({ ...prev, [docId]: currentTags }))
+    const newTags = (sharedTags[docId] || []).filter((t) => t !== tag)
+
+    setSharedTags((prev) => ({ ...prev, [docId]: newTags }))
+    prefs.removeTagFromDoc(docId, tag)
+
+    if (tagsSource === 'firestore') {
+      try {
+        await setDoc(doc(db, 'document_tags', docId), { tags: newTags })
+      } catch (err) {
+        console.error('Failed to remove tag from Firestore:', err.message)
+      }
     }
-  }, [sharedTags])
+  }, [sharedTags, tagsSource])
 
   const getTagsForDoc = useCallback((docId) => {
     return sharedTags[docId] || []
