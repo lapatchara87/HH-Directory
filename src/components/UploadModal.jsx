@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { X, Upload, Link as LinkIcon, FileUp } from 'lucide-react'
-import { CATEGORIES } from '../lib/categories'
+// Categories come from DocumentContext dynamically
 import { useDocuments } from '../contexts/DocumentContext'
 import { useAuth } from '../contexts/AuthContext'
 
 // Uses uploadFile from DocumentContext for Firebase Storage support
 
 export default function UploadModal({ onClose }) {
-  const { addDocument, uploadFile } = useDocuments()
+  const { addDocument, uploadFile, categories } = useDocuments()
   const { user } = useAuth()
   const [mode, setMode] = useState(null) // 'file' | 'link'
   const [name, setName] = useState('')
@@ -193,7 +193,7 @@ export default function UploadModal({ onClose }) {
                 required
               >
                 <option value="">เลือกหมวดหมู่</option>
-                {CATEGORIES.map((cat) => (
+                {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name}
                   </option>

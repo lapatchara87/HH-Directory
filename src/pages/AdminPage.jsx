@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useDocuments } from '../contexts/DocumentContext'
-import { CATEGORIES, getCategoryById } from '../lib/categories'
+// Categories come from DocumentContext dynamically
 import {
   Settings,
   FileText,
@@ -29,6 +29,7 @@ export default function AdminPage() {
     addOnboardingStep,
     updateOnboardingStep,
     deleteOnboardingStep,
+    categories,
   } = useDocuments()
 
   const activeTab = tab || 'documents'
@@ -80,6 +81,7 @@ export default function AdminPage() {
       {activeTab === 'documents' && (
         <DocumentsTab
           documents={documents}
+          categories={categories}
           onUpdate={updateDocument}
           onDelete={deleteDocument}
         />
@@ -93,12 +95,12 @@ export default function AdminPage() {
           onDelete={deleteOnboardingStep}
         />
       )}
-      {activeTab === 'dashboard' && <DashboardTab documents={documents} />}
+      {activeTab === 'dashboard' && <DashboardTab documents={documents} categories={categories} />}
     </div>
   )
 }
 
-function DocumentsTab({ documents, onUpdate, onDelete }) {
+function DocumentsTab({ documents, categories, onUpdate, onDelete }) {
   const [editingId, setEditingId] = useState(null)
   const [editData, setEditData] = useState({})
   const [filterCat, setFilterCat] = useState('')
@@ -134,7 +136,7 @@ function DocumentsTab({ documents, onUpdate, onDelete }) {
           className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
           <option value="">ทุกหมวดหมู่ ({documents.length})</option>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <option key={cat.id} value={cat.id}>{cat.name}</option>
           ))}
         </select>
@@ -174,7 +176,7 @@ function DocumentsTab({ documents, onUpdate, onDelete }) {
                           onChange={(e) => setEditData({ ...editData, category_id: Number(e.target.value) })}
                           className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
                         >
-                          {CATEGORIES.map((cat) => (
+                          {categories.map((cat) => (
                             <option key={cat.id} value={cat.id}>{cat.name}</option>
                           ))}
                         </select>
@@ -196,7 +198,7 @@ function DocumentsTab({ documents, onUpdate, onDelete }) {
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
                     <span className="text-xs text-slate-600">
-                      {getCategoryById(doc.category_id)?.name || '-'}
+                      {categories.find((c) => c.id === doc.category_id)?.name || '-'}
                     </span>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
@@ -370,7 +372,7 @@ function OnboardingTab({ steps, documents, onAdd, onUpdate, onDelete }) {
   )
 }
 
-function DashboardTab({ documents }) {
+function DashboardTab({ documents, categories }) {
   const totalFiles = documents.length
   const thisWeek = documents.filter((d) => {
     const date = new Date(d.created_at)
@@ -379,7 +381,7 @@ function DashboardTab({ documents }) {
     return date >= weekAgo
   }).length
 
-  const byCategoryCount = CATEGORIES.map((cat) => ({
+  const byCategoryCount = categories.map((cat) => ({
     ...cat,
     count: documents.filter((d) => d.category_id === cat.id).length,
   })).sort((a, b) => b.count - a.count)
@@ -402,7 +404,7 @@ function DashboardTab({ documents }) {
           <p className="text-sm text-slate-500">เพิ่มสัปดาห์นี้</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-2xl font-bold text-primary-600">{CATEGORIES.length}</p>
+          <p className="text-2xl font-bold text-primary-600">{categories.length}</p>
           <p className="text-sm text-slate-500">หมวดหมู่</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">

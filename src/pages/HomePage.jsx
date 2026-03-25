@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CATEGORIES } from '../lib/categories'
 import { useDocuments } from '../contexts/DocumentContext'
 import FileCard from '../components/FileCard'
 import FilePreviewModal from '../components/FilePreviewModal'
-import { Clock, ArrowRight } from 'lucide-react'
+import { Clock, ArrowRight, FolderOpen } from 'lucide-react'
 
 function formatDate(dateString) {
   if (!dateString) return '-'
@@ -13,19 +12,17 @@ function formatDate(dateString) {
 }
 
 export default function HomePage() {
-  const { getRecentDocuments, getCategoryFileCount, getCategoryLastUpdated, driveLoading, driveError } = useDocuments()
+  const { categories, getRecentDocuments, getCategoryFileCount, getCategoryLastUpdated, driveLoading, driveError } = useDocuments()
   const [previewDoc, setPreviewDoc] = useState(null)
   const recentDocs = getRecentDocuments(10)
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Document Hub</h1>
         <p className="text-slate-500 mt-1">ศูนย์รวมเอกสารบริษัท HuaHed</p>
       </div>
 
-      {/* Loading state */}
       {driveLoading && (
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 flex items-center gap-3">
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary-500 border-t-transparent" />
@@ -52,12 +49,13 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Categories Grid */}
+      {/* Categories Grid — dynamically from Drive folders */}
       <section>
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">หมวดหมู่เอกสาร</h2>
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+          {categories.length > 0 ? 'โฟลเดอร์จาก Google Drive' : 'หมวดหมู่เอกสาร'}
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {CATEGORIES.map((category) => {
-            const Icon = category.icon
+          {categories.map((category) => {
             const fileCount = getCategoryFileCount(category.id)
             const lastUpdated = getCategoryLastUpdated(category.id)
 
@@ -68,12 +66,11 @@ export default function HomePage() {
                 className="bg-white rounded-xl border border-slate-200 p-4 hover:border-primary-300 hover:shadow-md transition-all group"
               >
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${category.color} text-white mb-3`}>
-                  <Icon className="w-5 h-5" />
+                  <FolderOpen className="w-5 h-5" />
                 </div>
-                <h3 className="font-semibold text-slate-900 text-sm group-hover:text-primary-600 transition-colors line-clamp-1">
+                <h3 className="font-semibold text-slate-900 text-sm group-hover:text-primary-600 transition-colors line-clamp-2">
                   {category.name}
                 </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-1">{category.description}</p>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
                   <span className="text-xs text-slate-400">{fileCount} ไฟล์</span>
                   {lastUpdated && (

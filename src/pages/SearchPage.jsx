@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useDocuments } from '../contexts/DocumentContext'
-import { CATEGORIES } from '../lib/categories'
 import FileCard from '../components/FileCard'
 import FilePreviewModal from '../components/FilePreviewModal'
 import { Search, SlidersHorizontal } from 'lucide-react'
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { searchDocuments, searchQuery, setSearchQuery } = useDocuments()
+  const { searchDocuments, searchQuery, setSearchQuery, categories } = useDocuments()
   const [previewDoc, setPreviewDoc] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
   const [filterCategory, setFilterCategory] = useState('')
@@ -86,7 +85,7 @@ export default function SearchPage() {
                 className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">ทุกหมวดหมู่</option>
-                {CATEGORIES.map((cat) => (
+                {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
