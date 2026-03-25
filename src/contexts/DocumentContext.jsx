@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { useAuth } from './AuthContext'
 import { discoverAllDriveContent, searchDriveFiles } from '../lib/drive'
+import { collection, doc, onSnapshot, setDoc, deleteField } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import * as prefs from '../lib/userPrefs'
 
 const DocumentContext = createContext(null)
@@ -30,34 +32,70 @@ export function DocumentProvider({ children }) {
   const [driveError, setDriveError] = useState(null)
   const [bookmarks, setBookmarks] = useState(prefs.getBookmarks())
   const [recentlyViewed, setRecentlyViewed] = useState(prefs.getRecentlyViewed())
-  const [documentTags, setDocumentTags] = useState(prefs.getAllTags())
+  const [sharedTags, setSharedTags] = useState({})
+  const [tagsSource, setTagsSource] = useState('local') // 'firestore' | 'local'
 
+  // Listen to shared tags from Firestore
   useEffect(() => {
-    if (!accessToken) return
-    let cancelled = false
-
-    async function loadFromDrive() {
-      setDriveLoading(true)
-      setDriveError(null)
-      try {
-        const { documents: driveDocs, categories } = await discoverAllDriveContent(accessToken)
-        if (cancelled) return
-        if (driveDocs.length > 0) {
-          setDocuments(driveDocs)
-          setDriveCategories(categories)
-        } else {
-          setDriveError('ไม่พบไฟล์ใน Google Drive — ลอง logout แล้ว login ใหม่ แล้วกด Allow ให้สิทธิ์อ่าน Drive')
+    let unsubscribe = () => {}
+    try {
+      unsubscribe = onSnapshot(
+        collection(db, 'document_tags'),
+        (snapshot) => {
+          const tags = {}
+          snapshot.docs.forEach((d) => {
+            const data = d.data()
+            if (data.tags && data.tags.length > 0) {
+              tags[d.id] = data.tags
+            }
+          })
+          setSharedTags(tags)
+          setTagsSource('firestore')
+        },
+        (err) => {
+          console.warn('Firestore tags listener error:', err.message)
+          setSharedTags(prefs.getAllTags())
+          setTagsSource('local')
         }
-      } catch (err) {
-        console.error('Drive error:', err)
-        if (!cancelled) setDriveError('ไม่สามารถโหลดไฟล์จาก Google Drive: ' + (err.message || ''))
-      }
-      if (!cancelled) setDriveLoading(false)
+      )
+    } catch {
+      setSharedTags(prefs.getAllTags())
+      setTagsSource('local')
     }
+    return () => unsubscribe()
+  }, [])
 
-    loadFromDrive()
-    return () => { cancelled = true }
-  }, [accessToken])
+  // Load files from Drive — reusable for both initial load and manual refresh
+  const loadFromDrive = useCallback(async (token) => {
+    if (!token) return
+    setDriveLoading(true)
+    setDriveError(null)
+    try {
+      const { documents: driveDocs, categories } = await discoverAllDriveContent(token)
+      if (driveDocs.length > 0) {
+        setDocuments(driveDocs)
+        setDriveCategories(categories)
+      } else {
+        setDriveError('ไม่พบไฟล์ใน Google Drive — กดปุ่ม "เชื่อมต่อ Drive" เพื่อลองใหม่')
+      }
+    } catch (err) {
+      console.error('Drive error:', err)
+      setDriveError('ไม่สามารถโหลดไฟล์จาก Google Drive — กดปุ่ม "เชื่อมต่อ Drive" เพื่อลองใหม่')
+    }
+    setDriveLoading(false)
+  }, [])
+
+  // Auto-load on token change
+  useEffect(() => {
+    if (accessToken) loadFromDrive(accessToken)
+  }, [accessToken, loadFromDrive])
+
+  // Manual refresh — reload files from Drive
+  const refreshDriveData = useCallback(async () => {
+    if (accessToken) {
+      await loadFromDrive(accessToken)
+    }
+  }, [accessToken, loadFromDrive])
 
   const categories = driveCategories.map((cat, index) => ({
     ...cat,
@@ -126,8 +164,7 @@ export function DocumentProvider({ children }) {
       results = results.filter((d) => new Date(d.updated_at) <= to)
     }
     if (filters.tag) {
-      const docIds = prefs.getDocIdsByTag(filters.tag)
-      results = results.filter((d) => docIds.includes(d.id))
+      results = results.filter((d) => (sharedTags[d.id] || []).includes(filters.tag))
     }
     if (filters.bookmarkedOnly) {
       results = results.filter((d) => bookmarks.includes(d.id))
@@ -181,24 +218,49 @@ export function DocumentProvider({ children }) {
       .filter(Boolean)
   }, [documents, recentlyViewed])
 
-  // Tags
-  const addTag = useCallback((docId, tag) => {
-    prefs.addTagToDoc(docId, tag)
-    setDocumentTags({ ...prefs.getAllTags() })
-  }, [])
+  // Tags — shared via Firestore, with localStorage fallback
+  const addTag = useCallback(async (docId, tag) => {
+    const currentTags = sharedTags[docId] || []
+    if (currentTags.includes(tag)) return
+    const newTags = [...currentTags, tag]
 
-  const removeTag = useCallback((docId, tag) => {
+    // Optimistic update
+    setSharedTags((prev) => ({ ...prev, [docId]: newTags }))
+    prefs.addTagToDoc(docId, tag) // Always save locally as backup
+
+    if (tagsSource === 'firestore') {
+      try {
+        await setDoc(doc(db, 'document_tags', docId), { tags: newTags })
+      } catch (err) {
+        console.error('Failed to save tag to Firestore:', err.message)
+      }
+    }
+  }, [sharedTags, tagsSource])
+
+  const removeTag = useCallback(async (docId, tag) => {
+    const newTags = (sharedTags[docId] || []).filter((t) => t !== tag)
+
+    setSharedTags((prev) => ({ ...prev, [docId]: newTags }))
     prefs.removeTagFromDoc(docId, tag)
-    setDocumentTags({ ...prefs.getAllTags() })
-  }, [])
+
+    if (tagsSource === 'firestore') {
+      try {
+        await setDoc(doc(db, 'document_tags', docId), { tags: newTags })
+      } catch (err) {
+        console.error('Failed to remove tag from Firestore:', err.message)
+      }
+    }
+  }, [sharedTags, tagsSource])
 
   const getTagsForDoc = useCallback((docId) => {
-    return documentTags[docId] || []
-  }, [documentTags])
+    return sharedTags[docId] || []
+  }, [sharedTags])
 
   const getAllUniqueTags = useCallback(() => {
-    return prefs.getAllUniqueTags()
-  }, [documentTags])
+    const tagSet = new Set()
+    Object.values(sharedTags).forEach((tags) => tags.forEach((t) => tagSet.add(t)))
+    return [...tagSet].sort()
+  }, [sharedTags])
 
   // Unique uploaders for filter
   const getAllUploaders = useCallback(() => {
@@ -225,7 +287,7 @@ export function DocumentProvider({ children }) {
   return (
     <DocumentContext.Provider value={{
       documents, categories, onboardingSteps, searchQuery, setSearchQuery,
-      driveLoading, driveError,
+      driveLoading, driveError, refreshDriveData,
       getDocumentsByCategory, getDocumentById, getRecentDocuments,
       getCategoryFileCount, getCategoryLastUpdated, searchDocuments,
       addDocument, updateDocument, deleteDocument, uploadFile,
