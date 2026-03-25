@@ -13,7 +13,7 @@ function formatDate(dateString) {
 }
 
 export default function HomePage() {
-  const { getRecentDocuments, getCategoryFileCount, getCategoryLastUpdated } = useDocuments()
+  const { getRecentDocuments, getCategoryFileCount, getCategoryLastUpdated, driveLoading, driveError } = useDocuments()
   const [previewDoc, setPreviewDoc] = useState(null)
   const recentDocs = getRecentDocuments(10)
 
@@ -24,6 +24,20 @@ export default function HomePage() {
         <h1 className="text-2xl font-bold text-slate-900">Document Hub</h1>
         <p className="text-slate-500 mt-1">ศูนย์รวมเอกสารบริษัท HuaHed</p>
       </div>
+
+      {/* Loading state */}
+      {driveLoading && (
+        <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 flex items-center gap-3">
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary-500 border-t-transparent" />
+          <p className="text-sm text-primary-700">กำลังโหลดไฟล์จาก Google Drive...</p>
+        </div>
+      )}
+
+      {driveError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="text-sm text-red-700">{driveError}</p>
+        </div>
+      )}
 
       {/* Recently Updated */}
       <section>

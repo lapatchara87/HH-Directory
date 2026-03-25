@@ -20,6 +20,8 @@ export const db = getFirestore(app)
 export const storage = getStorage(app)
 
 export const googleProvider = new GoogleAuthProvider()
+// Request Google Drive read-only access
+googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly')
 googleProvider.setCustomParameters({
   hd: 'huahed.com',
   prompt: 'select_account',

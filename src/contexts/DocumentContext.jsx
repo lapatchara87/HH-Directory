@@ -1,373 +1,107 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-} from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '../lib/firebase'
+import { useAuth } from './AuthContext'
+import { fetchFilesFromFolder, fetchSubFolders, searchDriveFiles } from '../lib/drive'
+import { matchFolderToCategory } from '../lib/categories'
 
 const DocumentContext = createContext(null)
 
-// Demo data — used when Firebase is not configured yet
+// Demo data — used when no Google Drive access token is available
 const DEMO_DOCUMENTS = [
-  {
-    id: '1',
-    name: 'Company Policy 2026',
-    description: 'นโยบายบริษัทประจำปี 2026',
-    category_id: 1,
-    file_type: 'google_doc',
-    file_url: null,
-    drive_link: 'https://docs.google.com/document/d/example1',
-    tags: ['policy', 'company'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-03-01T09:00:00Z',
-    updated_at: '2026-03-20T14:30:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '2',
-    name: 'Organization Chart',
-    description: 'ผังองค์กร HuaHed Agency',
-    category_id: 1,
-    file_type: 'google_sheet',
-    file_url: null,
-    drive_link: 'https://docs.google.com/spreadsheets/d/example2',
-    tags: ['org', 'chart'],
-    uploaded_by: 'hr@huahed.com',
-    uploader_name: 'HR Team',
-    created_at: '2026-01-15T10:00:00Z',
-    updated_at: '2026-03-18T11:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '3',
-    name: 'Client Onboarding Workflow',
-    description: 'ขั้นตอนการ onboard ลูกค้าใหม่',
-    category_id: 2,
-    file_type: 'google_doc',
-    file_url: null,
-    drive_link: 'https://docs.google.com/document/d/example3',
-    tags: ['workflow', 'onboarding', 'client'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-02-10T09:00:00Z',
-    updated_at: '2026-03-22T16:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '4',
-    name: 'Leave Request Form',
-    description: 'แบบฟอร์มขอลา',
-    category_id: 3,
-    file_type: 'google_doc',
-    file_url: null,
-    drive_link: 'https://docs.google.com/document/d/example4',
-    tags: ['hr', 'leave', 'form'],
-    uploaded_by: 'hr@huahed.com',
-    uploader_name: 'HR Team',
-    created_at: '2026-01-05T08:00:00Z',
-    updated_at: '2026-03-15T09:30:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '5',
-    name: 'Employee Handbook',
-    description: 'คู่มือพนักงาน',
-    category_id: 3,
-    file_type: 'pdf',
-    file_url: '/files/handbook.pdf',
-    drive_link: null,
-    tags: ['hr', 'handbook', 'onboarding'],
-    uploaded_by: 'hr@huahed.com',
-    uploader_name: 'HR Team',
-    created_at: '2026-01-02T08:00:00Z',
-    updated_at: '2026-03-10T10:00:00Z',
-    is_archived: false,
-    file_size: '2.4 MB',
-  },
-  {
-    id: '6',
-    name: 'Monthly Expense Report Template',
-    description: 'เทมเพลตรายงานค่าใช้จ่ายรายเดือน',
-    category_id: 4,
-    file_type: 'google_sheet',
-    file_url: null,
-    drive_link: 'https://docs.google.com/spreadsheets/d/example6',
-    tags: ['accounting', 'expense', 'template'],
-    uploaded_by: 'accounting@huahed.com',
-    uploader_name: 'Accounting',
-    created_at: '2026-02-01T09:00:00Z',
-    updated_at: '2026-03-24T08:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '7',
-    name: 'AE Proposal Template',
-    description: 'เทมเพลตเสนองาน AE',
-    category_id: 5,
-    file_type: 'google_slide',
-    file_url: null,
-    drive_link: 'https://docs.google.com/presentation/d/example7',
-    tags: ['template', 'ae', 'proposal'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-02-20T09:00:00Z',
-    updated_at: '2026-03-21T15:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '8',
-    name: 'HuaHedHub Project Plan',
-    description: 'แผนโปรเจค HuaHedHub',
-    category_id: 6,
-    file_type: 'google_sheet',
-    file_url: null,
-    drive_link: 'https://docs.google.com/spreadsheets/d/example8',
-    tags: ['project', 'plan', 'huahedhub'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-03-01T09:00:00Z',
-    updated_at: '2026-03-25T10:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '9',
-    name: 'Procandid Brand Guidelines',
-    description: 'แนวทางการใช้แบรนด์ Procandid',
-    category_id: 7,
-    file_type: 'pdf',
-    file_url: '/files/procandid-brand.pdf',
-    drive_link: null,
-    tags: ['brand', 'procandid', 'guidelines'],
-    uploaded_by: 'design@procandid.com',
-    uploader_name: 'Design Team',
-    created_at: '2026-01-20T09:00:00Z',
-    updated_at: '2026-03-05T11:00:00Z',
-    is_archived: false,
-    file_size: '5.1 MB',
-  },
-  {
-    id: '10',
-    name: 'Allerguard Product Catalog',
-    description: 'แคตตาล็อกสินค้า Allerguard',
-    category_id: 8,
-    file_type: 'google_slide',
-    file_url: null,
-    drive_link: 'https://docs.google.com/presentation/d/example10',
-    tags: ['allerguard', 'product', 'catalog'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-02-15T09:00:00Z',
-    updated_at: '2026-03-19T14:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '11',
-    name: 'TOR Template 2026',
-    description: 'แบบฟอร์ม TOR ประจำปี 2026',
-    category_id: 9,
-    file_type: 'google_doc',
-    file_url: null,
-    drive_link: 'https://docs.google.com/document/d/example11',
-    tags: ['tor', 'template', 'government'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-01-10T09:00:00Z',
-    updated_at: '2026-03-12T09:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '12',
-    name: 'Project Brief - Campaign Q2',
-    description: 'บรีฟงาน Campaign ไตรมาส 2',
-    category_id: 10,
-    file_type: 'google_doc',
-    file_url: null,
-    drive_link: 'https://docs.google.com/document/d/example12',
-    tags: ['brief', 'campaign', 'q2'],
-    uploaded_by: 'ae@huahed.com',
-    uploader_name: 'AE Team',
-    created_at: '2026-03-15T09:00:00Z',
-    updated_at: '2026-03-23T17:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '13',
-    name: 'Digital Marketing 101',
-    description: 'ความรู้พื้นฐาน Digital Marketing',
-    category_id: 11,
-    file_type: 'pdf',
-    file_url: '/files/digital-marketing-101.pdf',
-    drive_link: null,
-    tags: ['knowledge', 'marketing', 'digital'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-02-05T09:00:00Z',
-    updated_at: '2026-03-08T10:00:00Z',
-    is_archived: false,
-    file_size: '3.2 MB',
-  },
-  {
-    id: '14',
-    name: 'Social Media Strategy Guide',
-    description: 'คู่มือกลยุทธ์ Social Media',
-    category_id: 11,
-    file_type: 'google_doc',
-    file_url: null,
-    drive_link: 'https://docs.google.com/document/d/example14',
-    tags: ['knowledge', 'social media', 'strategy'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-02-20T09:00:00Z',
-    updated_at: '2026-03-17T13:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '15',
-    name: 'Training Video - Canva',
-    description: 'วิดีโอสอนใช้ Canva สำหรับทีม',
-    category_id: 11,
-    file_type: 'video',
-    file_url: null,
-    drive_link: 'https://www.youtube.com/watch?v=example',
-    tags: ['knowledge', 'training', 'canva', 'video'],
-    uploaded_by: 'admin@huahed.com',
-    uploader_name: 'Admin',
-    created_at: '2026-03-05T09:00:00Z',
-    updated_at: '2026-03-05T09:00:00Z',
-    is_archived: false,
-    file_size: null,
-  },
-  {
-    id: '16',
-    name: 'Company Logo Pack',
-    description: 'ไฟล์โลโก้บริษัททุกขนาด',
-    category_id: 1,
-    file_type: 'image',
-    file_url: '/files/logo-pack.png',
-    drive_link: null,
-    tags: ['logo', 'brand', 'image'],
-    uploaded_by: 'design@huahed.com',
-    uploader_name: 'Design Team',
-    created_at: '2026-01-08T09:00:00Z',
-    updated_at: '2026-01-08T09:00:00Z',
-    is_archived: false,
-    file_size: '1.8 MB',
-  },
+  { id: '1', name: 'Company Policy 2026', description: 'นโยบายบริษัทประจำปี 2026', category_id: 1, file_type: 'google_doc', file_url: null, drive_link: 'https://docs.google.com/document/d/example1', tags: ['policy'], uploaded_by: 'admin@huahed.com', uploader_name: 'Admin', created_at: '2026-03-01T09:00:00Z', updated_at: '2026-03-20T14:30:00Z', is_archived: false, file_size: null },
+  { id: '2', name: 'Organization Chart', description: 'ผังองค์กร HuaHed', category_id: 1, file_type: 'google_sheet', file_url: null, drive_link: 'https://docs.google.com/spreadsheets/d/example2', tags: ['org'], uploaded_by: 'hr@huahed.com', uploader_name: 'HR', created_at: '2026-01-15T10:00:00Z', updated_at: '2026-03-18T11:00:00Z', is_archived: false, file_size: null },
+  { id: '3', name: 'Client Onboarding Workflow', description: 'ขั้นตอน onboard ลูกค้าใหม่', category_id: 2, file_type: 'google_doc', file_url: null, drive_link: 'https://docs.google.com/document/d/example3', tags: ['workflow'], uploaded_by: 'admin@huahed.com', uploader_name: 'Admin', created_at: '2026-02-10T09:00:00Z', updated_at: '2026-03-22T16:00:00Z', is_archived: false, file_size: null },
+  { id: '4', name: 'Leave Request Form', description: 'แบบฟอร์มขอลา', category_id: 3, file_type: 'google_doc', file_url: null, drive_link: 'https://docs.google.com/document/d/example4', tags: ['hr'], uploaded_by: 'hr@huahed.com', uploader_name: 'HR', created_at: '2026-01-05T08:00:00Z', updated_at: '2026-03-15T09:30:00Z', is_archived: false, file_size: null },
+  { id: '5', name: 'Employee Handbook', description: 'คู่มือพนักงาน', category_id: 3, file_type: 'pdf', file_url: null, drive_link: 'https://docs.google.com/document/d/example5', tags: ['handbook'], uploaded_by: 'hr@huahed.com', uploader_name: 'HR', created_at: '2026-01-02T08:00:00Z', updated_at: '2026-03-10T10:00:00Z', is_archived: false, file_size: '2.4 MB' },
 ]
 
 const DEMO_ONBOARDING_STEPS = [
-  {
-    id: '1',
-    title: 'อ่านคู่มือพนักงาน',
-    description: 'อ่านคู่มือพนักงานเพื่อทำความเข้าใจนโยบายและวัฒนธรรมบริษัท',
-    document_id: '5',
-    display_order: 1,
-    is_active: true,
-  },
-  {
-    id: '2',
-    title: 'ทำความเข้าใจผังองค์กร',
-    description: 'ดูผังองค์กรเพื่อทราบโครงสร้างทีมและหัวหน้างาน',
-    document_id: '2',
-    display_order: 2,
-    is_active: true,
-  },
-  {
-    id: '3',
-    title: 'ศึกษา Workflow การทำงาน',
-    description: 'เรียนรู้ขั้นตอนการทำงานกับลูกค้าตั้งแต่ต้นจนจบ',
-    document_id: '3',
-    display_order: 3,
-    is_active: true,
-  },
-  {
-    id: '4',
-    title: 'ทำแบบฟอร์ม HR',
-    description: 'กรอกเอกสาร HR ที่จำเป็นสำหรับพนักงานใหม่',
-    document_id: '4',
-    display_order: 4,
-    is_active: true,
-  },
-  {
-    id: '5',
-    title: 'อ่านนโยบายบริษัท',
-    description: 'อ่านนโยบายบริษัทเพิ่มเติมรวมถึงกฎระเบียบต่างๆ',
-    document_id: '1',
-    display_order: 5,
-    is_active: true,
-  },
-  {
-    id: '6',
-    title: 'ดูวิดีโอ Training',
-    description: 'ดูวิดีโอสอนเครื่องมือที่ใช้ในบริษัท',
-    document_id: '15',
-    display_order: 6,
-    is_active: true,
-  },
+  { id: '1', title: 'อ่านคู่มือพนักงาน', description: 'อ่านคู่มือพนักงานเพื่อทำความเข้าใจนโยบายบริษัท', document_id: '5', display_order: 1, is_active: true },
+  { id: '2', title: 'ทำความเข้าใจผังองค์กร', description: 'ดูผังองค์กรเพื่อทราบโครงสร้างทีม', document_id: '2', display_order: 2, is_active: true },
+  { id: '3', title: 'ศึกษา Workflow', description: 'เรียนรู้ขั้นตอนการทำงานกับลูกค้า', document_id: '3', display_order: 3, is_active: true },
+  { id: '4', title: 'ทำแบบฟอร์ม HR', description: 'กรอกเอกสาร HR สำหรับพนักงานใหม่', document_id: '4', display_order: 4, is_active: true },
+  { id: '5', title: 'อ่านนโยบายบริษัท', description: 'อ่านนโยบายและกฎระเบียบต่างๆ', document_id: '1', display_order: 5, is_active: true },
 ]
 
-function isFirebaseConfigured() {
-  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID
-  return projectId && projectId !== 'demo-project'
-}
-
 export function DocumentProvider({ children }) {
+  const { accessToken } = useAuth()
   const [documents, setDocuments] = useState(DEMO_DOCUMENTS)
   const [onboardingSteps, setOnboardingSteps] = useState(DEMO_ONBOARDING_STEPS)
   const [searchQuery, setSearchQuery] = useState('')
-  const [useFirestore, setUseFirestore] = useState(false)
+  const [driveLoading, setDriveLoading] = useState(false)
+  const [driveError, setDriveError] = useState(null)
+  const [folderMap, setFolderMap] = useState({}) // folderId -> categoryId
 
-  // Listen to Firestore if configured
+  // Fetch files from Google Drive when access token is available
   useEffect(() => {
-    if (!isFirebaseConfigured()) return
+    if (!accessToken) return
 
-    setUseFirestore(true)
+    async function loadFromDrive() {
+      setDriveLoading(true)
+      setDriveError(null)
 
-    const docsQuery = query(collection(db, 'documents'), orderBy('updated_at', 'desc'))
-    const unsubDocs = onSnapshot(docsQuery, (snapshot) => {
-      const docs = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        created_at: d.data().created_at?.toDate?.()?.toISOString() || d.data().created_at,
-        updated_at: d.data().updated_at?.toDate?.()?.toISOString() || d.data().updated_at,
-      }))
-      if (docs.length > 0) setDocuments(docs)
-    }, () => {
-      // Firestore error — fall back to demo data
-      setUseFirestore(false)
-    })
+      try {
+        // Step 1: Find all files the user has access to via Shared Drives and My Drive
+        // We'll search for all top-level folders and map them to categories
+        const allDocuments = []
 
-    const stepsQuery = query(collection(db, 'onboarding_steps'), orderBy('display_order', 'asc'))
-    const unsubSteps = onSnapshot(stepsQuery, (snapshot) => {
-      const steps = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
-      if (steps.length > 0) setOnboardingSteps(steps)
-    })
+        // Fetch files from Shared Drives
+        const sharedDrivesRes = await fetch(
+          'https://www.googleapis.com/drive/v3/drives?pageSize=50',
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        )
 
-    return () => {
-      unsubDocs()
-      unsubSteps()
+        let sharedDrives = []
+        if (sharedDrivesRes.ok) {
+          const data = await sharedDrivesRes.json()
+          sharedDrives = data.drives || []
+        }
+
+        // For each shared drive, get subfolders and files
+        for (const drive of sharedDrives) {
+          const subFolders = await fetchSubFolders(accessToken, drive.id)
+
+          // Files directly in the shared drive root
+          const rootFiles = await fetchFilesFromFolder(accessToken, drive.id, null)
+          // Try to match the drive name itself to a category
+          const driveCategory = matchFolderToCategory(drive.name)
+          rootFiles.forEach((f) => { if (!f.category_id) f.category_id = driveCategory })
+          allDocuments.push(...rootFiles)
+
+          // Files in subfolders
+          const newFolderMap = {}
+          for (const folder of subFolders) {
+            const categoryId = matchFolderToCategory(folder.name)
+            newFolderMap[folder.id] = categoryId
+            const files = await fetchFilesFromFolder(accessToken, folder.id, categoryId)
+            allDocuments.push(...files)
+          }
+          setFolderMap((prev) => ({ ...prev, ...newFolderMap }))
+        }
+
+        // Also fetch from My Drive root folders
+        const myDriveFolders = await fetchSubFolders(accessToken, 'root')
+        for (const folder of myDriveFolders) {
+          const categoryId = matchFolderToCategory(folder.name)
+          if (categoryId) {
+            const files = await fetchFilesFromFolder(accessToken, folder.id, categoryId)
+            allDocuments.push(...files)
+          }
+        }
+
+        // If we got files, replace demo data
+        if (allDocuments.length > 0) {
+          setDocuments(allDocuments)
+        }
+      } catch (err) {
+        console.error('Drive fetch error:', err)
+        setDriveError('ไม่สามารถโหลดไฟล์จาก Google Drive ได้')
+      }
+
+      setDriveLoading(false)
     }
-  }, [])
+
+    loadFromDrive()
+  }, [accessToken])
 
   const getDocumentsByCategory = useCallback((categoryId) => {
     return documents.filter((d) => d.category_id === categoryId && !d.is_archived)
@@ -394,8 +128,22 @@ export function DocumentProvider({ children }) {
     return catDocs.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0].updated_at
   }, [documents])
 
-  const searchDocuments = useCallback((q, filters = {}) => {
+  const searchDocuments = useCallback(async (q, filters = {}) => {
     let results = [...documents]
+
+    // If we have an access token and a query, also search Drive
+    if (q && accessToken) {
+      try {
+        const driveResults = await searchDriveFiles(accessToken, q)
+        // Merge with local, avoiding duplicates
+        const existingIds = new Set(results.map((d) => d.id))
+        driveResults.forEach((d) => {
+          if (!existingIds.has(d.id)) results.push(d)
+        })
+      } catch {
+        // Fall back to local search only
+      }
+    }
 
     if (q) {
       const lower = q.toLowerCase()
@@ -419,94 +167,55 @@ export function DocumentProvider({ children }) {
     }
 
     return results
-  }, [documents])
+  }, [documents, accessToken])
 
-  const addDocument = useCallback(async (docData) => {
-    if (useFirestore) {
-      await addDoc(collection(db, 'documents'), {
-        ...docData,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
-        is_archived: false,
-      })
-    } else {
-      const newDoc = {
-        ...docData,
-        id: String(Date.now()),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        is_archived: false,
-      }
-      setDocuments((prev) => [newDoc, ...prev])
-      return newDoc
+  const addDocument = useCallback((docData) => {
+    const newDoc = {
+      ...docData,
+      id: String(Date.now()),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_archived: false,
     }
-  }, [useFirestore])
+    setDocuments((prev) => [newDoc, ...prev])
+    return newDoc
+  }, [])
 
-  const updateDocument = useCallback(async (id, updates) => {
-    if (useFirestore) {
-      await updateDoc(doc(db, 'documents', id), {
-        ...updates,
-        updated_at: serverTimestamp(),
-      })
-    } else {
-      setDocuments((prev) =>
-        prev.map((d) =>
-          d.id === id ? { ...d, ...updates, updated_at: new Date().toISOString() } : d
-        )
+  const updateDocument = useCallback((id, updates) => {
+    setDocuments((prev) =>
+      prev.map((d) =>
+        d.id === id ? { ...d, ...updates, updated_at: new Date().toISOString() } : d
       )
-    }
-  }, [useFirestore])
+    )
+  }, [])
 
-  const deleteDocument = useCallback(async (id) => {
-    if (useFirestore) {
-      await deleteDoc(doc(db, 'documents', id))
-    } else {
-      setDocuments((prev) => prev.filter((d) => d.id !== id))
-    }
-  }, [useFirestore])
+  const deleteDocument = useCallback((id) => {
+    setDocuments((prev) => prev.filter((d) => d.id !== id))
+  }, [])
 
-  const uploadFile = useCallback(async (file) => {
-    if (!useFirestore) return URL.createObjectURL(file)
-    const fileRef = ref(storage, `documents/${Date.now()}_${file.name}`)
-    await uploadBytes(fileRef, file)
-    return getDownloadURL(fileRef)
-  }, [useFirestore])
+  const uploadFile = useCallback((file) => {
+    return URL.createObjectURL(file)
+  }, [])
 
-  const addOnboardingStep = useCallback(async (step) => {
-    if (useFirestore) {
-      await addDoc(collection(db, 'onboarding_steps'), {
-        ...step,
-        display_order: onboardingSteps.length + 1,
-        is_active: true,
-      })
-    } else {
-      const newStep = {
-        ...step,
-        id: String(Date.now()),
-        display_order: onboardingSteps.length + 1,
-        is_active: true,
-      }
-      setOnboardingSteps((prev) => [...prev, newStep])
+  const addOnboardingStep = useCallback((step) => {
+    const newStep = {
+      ...step,
+      id: String(Date.now()),
+      display_order: onboardingSteps.length + 1,
+      is_active: true,
     }
-  }, [useFirestore, onboardingSteps])
+    setOnboardingSteps((prev) => [...prev, newStep])
+  }, [onboardingSteps])
 
-  const updateOnboardingStep = useCallback(async (id, updates) => {
-    if (useFirestore) {
-      await updateDoc(doc(db, 'onboarding_steps', id), updates)
-    } else {
-      setOnboardingSteps((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
-      )
-    }
-  }, [useFirestore])
+  const updateOnboardingStep = useCallback((id, updates) => {
+    setOnboardingSteps((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+    )
+  }, [])
 
-  const deleteOnboardingStep = useCallback(async (id) => {
-    if (useFirestore) {
-      await deleteDoc(doc(db, 'onboarding_steps', id))
-    } else {
-      setOnboardingSteps((prev) => prev.filter((s) => s.id !== id))
-    }
-  }, [useFirestore])
+  const deleteOnboardingStep = useCallback((id) => {
+    setOnboardingSteps((prev) => prev.filter((s) => s.id !== id))
+  }, [])
 
   const reorderOnboardingSteps = useCallback((newOrder) => {
     setOnboardingSteps(newOrder.map((s, i) => ({ ...s, display_order: i + 1 })))
@@ -519,6 +228,8 @@ export function DocumentProvider({ children }) {
         onboardingSteps,
         searchQuery,
         setSearchQuery,
+        driveLoading,
+        driveError,
         getDocumentsByCategory,
         getDocumentById,
         getRecentDocuments,

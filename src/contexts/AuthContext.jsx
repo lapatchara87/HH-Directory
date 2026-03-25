@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut, GoogleAuthProvider } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db, googleProvider, isAllowedDomain } from '../lib/firebase'
 
@@ -7,6 +7,7 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
+  const [accessToken, setAccessToken] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -40,7 +41,6 @@ export function AuthProvider({ children }) {
               role,
             })
           } catch {
-            // If Firestore is not set up yet, still allow login
             setUser({
               uid: firebaseUser.uid,
               email: firebaseUser.email,
@@ -56,6 +56,7 @@ export function AuthProvider({ children }) {
         }
       } else {
         setUser(null)
+        setAccessToken(null)
       }
       setLoading(false)
     })
@@ -66,7 +67,12 @@ export function AuthProvider({ children }) {
   async function signInWithGoogle() {
     setError(null)
     try {
-      await signInWithPopup(auth, googleProvider)
+      const result = await signInWithPopup(auth, googleProvider)
+      // Get Google OAuth access token for Drive API
+      const credential = GoogleAuthProvider.credentialFromResult(result)
+      if (credential?.accessToken) {
+        setAccessToken(credential.accessToken)
+      }
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
         setError(err.message)
@@ -77,6 +83,7 @@ export function AuthProvider({ children }) {
   async function signOut() {
     await firebaseSignOut(auth)
     setUser(null)
+    setAccessToken(null)
   }
 
   // For demo/development: allow bypassing auth
@@ -88,13 +95,14 @@ export function AuthProvider({ children }) {
       photoURL: null,
       role: 'admin',
     })
+    setAccessToken(null)
     setLoading(false)
   }
 
   const isAdmin = user?.role === 'admin' || user?.uid === 'dev-user'
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, isAdmin, signInWithGoogle, signOut, devSignIn }}>
+    <AuthContext.Provider value={{ user, accessToken, loading, error, isAdmin, signInWithGoogle, signOut, devSignIn }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useDocuments } from '../contexts/DocumentContext'
 import { CATEGORIES } from '../lib/categories'
@@ -15,16 +15,28 @@ export default function SearchPage() {
   const [filterType, setFilterType] = useState('')
   const [sortBy, setSortBy] = useState('latest')
   const [includeArchived, setIncludeArchived] = useState(false)
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
 
   const query = searchParams.get('q') || searchQuery
 
-  const results = useMemo(() => {
-    return searchDocuments(query, {
-      category: filterCategory ? Number(filterCategory) : undefined,
-      fileType: filterType || undefined,
-      sort: sortBy,
-      includeArchived,
-    })
+  useEffect(() => {
+    let cancelled = false
+    async function doSearch() {
+      setSearching(true)
+      const res = await searchDocuments(query, {
+        category: filterCategory ? Number(filterCategory) : undefined,
+        fileType: filterType || undefined,
+        sort: sortBy,
+        includeArchived,
+      })
+      if (!cancelled) {
+        setResults(res)
+        setSearching(false)
+      }
+    }
+    doSearch()
+    return () => { cancelled = true }
   }, [query, filterCategory, filterType, sortBy, includeArchived, searchDocuments])
 
   function handleSearch(e) {
