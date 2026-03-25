@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { X, Upload, Link as LinkIcon, FileUp } from 'lucide-react'
-import { CATEGORIES } from '../lib/categories'
+// Categories come from DocumentContext dynamically
 import { useDocuments } from '../contexts/DocumentContext'
 import { useAuth } from '../contexts/AuthContext'
 
+// Uses uploadFile from DocumentContext for Firebase Storage support
+
 export default function UploadModal({ onClose }) {
-  const { addDocument } = useDocuments()
+  const { addDocument, uploadFile, categories } = useDocuments()
   const { user } = useAuth()
   const [mode, setMode] = useState(null) // 'file' | 'link'
   const [name, setName] = useState('')
@@ -38,28 +40,32 @@ export default function UploadModal({ onClose }) {
     if (!name.trim() || !categoryId) return
     setSubmitting(true)
 
-    const doc = {
-      name: name.trim(),
-      description: description.trim(),
-      category_id: Number(categoryId),
-      tags: tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
-      uploaded_by: user?.email || 'unknown',
-      uploader_name: user?.user_metadata?.full_name || user?.email || 'Unknown',
-    }
+    try {
+      const docData = {
+        name: name.trim(),
+        description: description.trim(),
+        category_id: Number(categoryId),
+        tags: tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        uploaded_by: user?.email || 'unknown',
+        uploader_name: user?.displayName || user?.email || 'Unknown',
+      }
 
-    if (mode === 'link') {
-      doc.file_type = detectFileType(link)
-      doc.drive_link = link.trim()
-      doc.file_url = null
-      doc.file_size = null
-    } else if (file) {
-      doc.file_type = detectUploadFileType(file.name)
-      doc.file_url = URL.createObjectURL(file)
-      doc.drive_link = null
-      doc.file_size = formatFileSize(file.size)
-    }
+      if (mode === 'link') {
+        docData.file_type = detectFileType(link)
+        docData.drive_link = link.trim()
+        docData.file_url = null
+        docData.file_size = null
+      } else if (file) {
+        docData.file_type = detectUploadFileType(file.name)
+        docData.file_url = await uploadFile(file)
+        docData.drive_link = null
+        docData.file_size = formatFileSize(file.size)
+      }
 
-    addDocument(doc)
+      await addDocument(docData)
+    } catch (err) {
+      console.error('Upload error:', err)
+    }
     setSubmitting(false)
     onClose()
   }
@@ -187,7 +193,7 @@ export default function UploadModal({ onClose }) {
                 required
               >
                 <option value="">เลือกหมวดหมู่</option>
-                {CATEGORIES.map((cat) => (
+                {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name}
                   </option>

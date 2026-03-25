@@ -1,41 +1,74 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useDocuments } from '../contexts/DocumentContext'
-import { CATEGORIES } from '../lib/categories'
 import FileCard from '../components/FileCard'
 import FilePreviewModal from '../components/FilePreviewModal'
-import { Search, SlidersHorizontal } from 'lucide-react'
+import { Search, SlidersHorizontal, Star, Clock, Tag } from 'lucide-react'
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { searchDocuments, searchQuery, setSearchQuery } = useDocuments()
+  const {
+    searchDocuments, searchQuery, setSearchQuery, categories,
+    getAllUploaders, getAllUniqueTags, getBookmarkedDocs, getRecentlyViewedDocs,
+  } = useDocuments()
   const [previewDoc, setPreviewDoc] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
   const [filterCategory, setFilterCategory] = useState('')
   const [filterType, setFilterType] = useState('')
+  const [filterUploader, setFilterUploader] = useState('')
+  const [filterTag, setFilterTag] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(false)
   const [sortBy, setSortBy] = useState('latest')
-  const [includeArchived, setIncludeArchived] = useState(false)
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [activeView, setActiveView] = useState('search') // 'search' | 'bookmarks' | 'recent'
 
   const query = searchParams.get('q') || searchQuery
 
-  const results = useMemo(() => {
-    return searchDocuments(query, {
-      category: filterCategory ? Number(filterCategory) : undefined,
-      fileType: filterType || undefined,
-      sort: sortBy,
-      includeArchived,
-    })
-  }, [query, filterCategory, filterType, sortBy, includeArchived, searchDocuments])
+  useEffect(() => {
+    if (activeView !== 'search') return
+    let cancelled = false
+    async function doSearch() {
+      setSearching(true)
+      const res = await searchDocuments(query, {
+        category: filterCategory ? Number(filterCategory) : undefined,
+        fileType: filterType || undefined,
+        uploader: filterUploader || undefined,
+        tag: filterTag || undefined,
+        dateFrom: filterDateFrom || undefined,
+        dateTo: filterDateTo || undefined,
+        bookmarkedOnly,
+        sort: sortBy,
+      })
+      if (!cancelled) { setResults(res); setSearching(false) }
+    }
+    doSearch()
+    return () => { cancelled = true }
+  }, [query, filterCategory, filterType, filterUploader, filterTag, filterDateFrom, filterDateTo, bookmarkedOnly, sortBy, searchDocuments, activeView])
 
   function handleSearch(e) {
     e.preventDefault()
     const formData = new FormData(e.target)
     const q = formData.get('q')
+    setActiveView('search')
     if (q.trim()) {
       setSearchParams({ q: q.trim() })
       setSearchQuery(q.trim())
     }
   }
+
+  const uploaders = getAllUploaders()
+  const allTags = getAllUniqueTags()
+  const bookmarkedDocs = getBookmarkedDocs()
+  const recentDocs = getRecentlyViewedDocs(20)
+
+  const displayDocs = activeView === 'bookmarks' ? bookmarkedDocs
+    : activeView === 'recent' ? recentDocs
+    : results
+
+  const hasActiveFilters = filterCategory || filterType || filterUploader || filterTag || filterDateFrom || filterDateTo || bookmarkedOnly
 
   return (
     <div className="space-y-6">
@@ -47,14 +80,14 @@ export default function SearchPage() {
             type="text"
             name="q"
             defaultValue={query}
-            placeholder="ค้นหาเอกสาร ชื่อไฟล์ แท็ก..."
+            placeholder="ค้นหาเอกสาร ชื่อไฟล์ คนอัปโหลด..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
           <button
             type="button"
             onClick={() => setShowFilters(!showFilters)}
             className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-colors ${
-              showFilters ? 'bg-primary-100 text-primary-600' : 'hover:bg-slate-100 text-slate-400'
+              showFilters || hasActiveFilters ? 'bg-primary-100 text-primary-600' : 'hover:bg-slate-100 text-slate-400'
             }`}
           >
             <SlidersHorizontal className="w-5 h-5" />
@@ -62,30 +95,53 @@ export default function SearchPage() {
         </div>
       </form>
 
-      {/* Filters */}
-      {showFilters && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Quick view tabs */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveView('search')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            activeView === 'search' ? 'bg-primary-100 text-primary-700' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Search className="w-3.5 h-3.5" />
+          ค้นหา
+        </button>
+        <button
+          onClick={() => setActiveView('bookmarks')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            activeView === 'bookmarks' ? 'bg-amber-100 text-amber-700' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Star className="w-3.5 h-3.5" />
+          ปักหมุด ({bookmarkedDocs.length})
+        </button>
+        <button
+          onClick={() => setActiveView('recent')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            activeView === 'recent' ? 'bg-green-100 text-green-700' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          เพิ่งเปิด ({recentDocs.length})
+        </button>
+      </div>
+
+      {/* Filters — only for search view */}
+      {showFilters && activeView === 'search' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">หมวดหมู่</label>
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
+              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
                 <option value="">ทุกหมวดหมู่</option>
-                {CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
+                {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">ประเภทไฟล์</label>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
                 <option value="">ทุกประเภท</option>
                 <option value="google_doc">Google Docs</option>
                 <option value="google_sheet">Google Sheets</option>
@@ -97,48 +153,115 @@ export default function SearchPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">เรียงลำดับ</label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
                 <option value="latest">ล่าสุด</option>
                 <option value="oldest">เก่าสุด</option>
                 <option value="name">ชื่อ A-Z</option>
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">ผู้อัปโหลด</label>
+              <select value={filterUploader} onChange={(e) => setFilterUploader(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                <option value="">ทุกคน</option>
+                {uploaders.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">ตั้งแต่วันที่</label>
+              <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">ถึงวันที่</label>
+              <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500" />
+            </div>
           </div>
-          <label className="flex items-center gap-2 mt-3 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(e) => setIncludeArchived(e.target.checked)}
-              className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-            />
-            รวมเอกสารเก่า/ที่เก็บถาวร
-          </label>
+          {allTags.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-2">แท็ก</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setFilterTag('')}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    !filterTag ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >ทั้งหมด</button>
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setFilterTag(filterTag === tag ? '' : tag)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1 ${
+                      filterTag === tag ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Tag className="w-3 h-3" />
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={bookmarkedOnly} onChange={(e) => setBookmarkedOnly(e.target.checked)}
+                className="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+              เฉพาะที่ปักหมุด
+            </label>
+            {hasActiveFilters && (
+              <button
+                onClick={() => {
+                  setFilterCategory(''); setFilterType(''); setFilterUploader('')
+                  setFilterTag(''); setFilterDateFrom(''); setFilterDateTo('')
+                  setBookmarkedOnly(false)
+                }}
+                className="text-xs text-red-500 hover:text-red-700"
+              >ล้างตัวกรองทั้งหมด</button>
+            )}
+          </div>
         </div>
       )}
 
       {/* Results */}
       <div>
         <p className="text-sm text-slate-500 mb-4">
-          {query ? (
-            <>พบ <span className="font-medium text-slate-700">{results.length}</span> ผลลัพธ์สำหรับ &ldquo;{query}&rdquo;</>
+          {activeView === 'bookmarks' ? (
+            <>ไฟล์ที่ปักหมุด <span className="font-medium text-slate-700">{displayDocs.length}</span> ไฟล์</>
+          ) : activeView === 'recent' ? (
+            <>เพิ่งเปิดดู <span className="font-medium text-slate-700">{displayDocs.length}</span> ไฟล์</>
+          ) : query ? (
+            <>พบ <span className="font-medium text-slate-700">{displayDocs.length}</span> ผลลัพธ์สำหรับ &ldquo;{query}&rdquo;{searching && ' (กำลังค้นหา...)'}</>
           ) : (
-            <>เอกสารทั้งหมด <span className="font-medium text-slate-700">{results.length}</span> ไฟล์</>
+            <>เอกสารทั้งหมด <span className="font-medium text-slate-700">{displayDocs.length}</span> ไฟล์</>
           )}
         </p>
-        {results.length === 0 ? (
+        {displayDocs.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-            <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500">ไม่พบเอกสารที่ค้นหา</p>
-            <p className="text-sm text-slate-400 mt-1">ลองค้นหาด้วยคำอื่น หรือลองใช้ตัวกรอง</p>
+            {activeView === 'bookmarks' ? (
+              <>
+                <Star className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500">ยังไม่มีไฟล์ที่ปักหมุด</p>
+                <p className="text-sm text-slate-400 mt-1">กดไอคอนดาวที่ไฟล์เพื่อปักหมุด</p>
+              </>
+            ) : activeView === 'recent' ? (
+              <>
+                <Clock className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500">ยังไม่มีไฟล์ที่เปิดดู</p>
+              </>
+            ) : (
+              <>
+                <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500">ไม่พบเอกสารที่ค้นหา</p>
+                <p className="text-sm text-slate-400 mt-1">ลองค้นหาด้วยคำอื่น หรือลองใช้ตัวกรอง</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid gap-3">
-            {results.map((doc) => (
-              <FileCard key={doc.id} document={doc} onPreview={setPreviewDoc} />
+            {displayDocs.map((doc) => (
+              <FileCard key={doc.id} document={doc} onPreview={setPreviewDoc} showActions />
             ))}
           </div>
         )}

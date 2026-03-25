@@ -1,18 +1,19 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getCategoryBySlug } from '../lib/categories'
 import { useDocuments } from '../contexts/DocumentContext'
 import FileCard from '../components/FileCard'
 import FilePreviewModal from '../components/FilePreviewModal'
-import { ArrowLeft, Filter } from 'lucide-react'
+import { ArrowLeft, Filter, FolderOpen } from 'lucide-react'
 
 export default function CategoryPage() {
   const { slug } = useParams()
-  const category = getCategoryBySlug(slug)
-  const { getDocumentsByCategory } = useDocuments()
+  const { categories, getDocumentsByCategory } = useDocuments()
   const [previewDoc, setPreviewDoc] = useState(null)
   const [sortBy, setSortBy] = useState('latest')
   const [filterType, setFilterType] = useState('')
+
+  // Find category by slug (which is the folderId for dynamic categories)
+  const category = categories.find((c) => c.slug === slug)
 
   if (!category) {
     return (
@@ -27,23 +28,14 @@ export default function CategoryPage() {
 
   let docs = getDocumentsByCategory(category.id)
 
-  if (filterType) {
-    docs = docs.filter((d) => d.file_type === filterType)
-  }
+  if (filterType) docs = docs.filter((d) => d.file_type === filterType)
 
-  if (sortBy === 'oldest') {
-    docs = [...docs].sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at))
-  } else if (sortBy === 'name') {
-    docs = [...docs].sort((a, b) => a.name.localeCompare(b.name))
-  } else {
-    docs = [...docs].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
-  }
-
-  const Icon = category.icon
+  if (sortBy === 'oldest') docs = [...docs].sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at))
+  else if (sortBy === 'name') docs = [...docs].sort((a, b) => a.name.localeCompare(b.name))
+  else docs = [...docs].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb & Header */}
       <div>
         <Link
           to="/"
@@ -53,17 +45,16 @@ export default function CategoryPage() {
           กลับหน้าหลัก
         </Link>
         <div className="flex items-center gap-3">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${category.color} text-white`}>
-            <Icon className="w-6 h-6" />
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${category.color || 'bg-blue-500'} text-white`}>
+            <FolderOpen className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900">{category.name}</h1>
-            <p className="text-sm text-slate-500">{category.description} ({docs.length} ไฟล์)</p>
+            <p className="text-sm text-slate-500">{docs.length} ไฟล์</p>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-slate-400" />
@@ -92,10 +83,9 @@ export default function CategoryPage() {
         </select>
       </div>
 
-      {/* File list */}
       {docs.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-          <p className="text-slate-500">ยังไม่มีเอกสารในหมวดหมู่นี้</p>
+          <p className="text-slate-500">ยังไม่มีเอกสารในโฟลเดอร์นี้</p>
         </div>
       ) : (
         <div className="grid gap-3">
