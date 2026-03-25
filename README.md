@@ -5,16 +5,16 @@
 ## Tech Stack
 
 - **Frontend:** React + Vite + Tailwind CSS (Mobile-first)
-- **Auth:** Google OAuth (restricted to @huahed.com and @procandid.com)
-- **Database:** Supabase (PostgreSQL)
-- **Storage:** Supabase Storage (PDF/images) + Google Drive (Docs/Sheets/Slides)
+- **Auth:** Firebase Authentication + Google OAuth (restricted to @huahed.com and @procandid.com)
+- **Database:** Cloud Firestore
+- **Storage:** Firebase Storage (PDF/images) + Google Drive (Docs/Sheets/Slides)
 - **Deploy:** Netlify
 
 ## Getting Started
 
 ```bash
 npm install
-cp .env.example .env   # Fill in Supabase credentials
+cp .env.example .env   # Fill in Firebase credentials
 npm run dev
 ```
 
@@ -28,14 +28,19 @@ npm run dev
 - Onboarding checklist for new employees
 - Admin panel (manage documents, onboarding steps, dashboard)
 - Fully responsive mobile-first UI
+- Demo mode: works without Firebase config for testing
 
-## Database Setup
+## Firebase Setup
 
-Run `supabase/schema.sql` in your Supabase SQL editor to create tables, indexes, RLS policies, and seed data.
+See `SETUP.md` for step-by-step instructions (in Thai).
 
 ## Environment Variables
 
 | Variable | Description |
 |---|---|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key |
+| `VITE_FIREBASE_API_KEY` | Firebase API Key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase Auth Domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase Project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase Storage Bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Messaging Sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase App ID |

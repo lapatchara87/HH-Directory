@@ -1,9 +1,21 @@
-import { createContext, useContext, useState, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '../lib/firebase'
 
 const DocumentContext = createContext(null)
 
-// Demo data for development
+// Demo data — used when Firebase is not configured yet
 const DEMO_DOCUMENTS = [
   {
     id: '1',
@@ -314,10 +326,48 @@ const DEMO_ONBOARDING_STEPS = [
   },
 ]
 
+function isFirebaseConfigured() {
+  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID
+  return projectId && projectId !== 'demo-project'
+}
+
 export function DocumentProvider({ children }) {
   const [documents, setDocuments] = useState(DEMO_DOCUMENTS)
   const [onboardingSteps, setOnboardingSteps] = useState(DEMO_ONBOARDING_STEPS)
   const [searchQuery, setSearchQuery] = useState('')
+  const [useFirestore, setUseFirestore] = useState(false)
+
+  // Listen to Firestore if configured
+  useEffect(() => {
+    if (!isFirebaseConfigured()) return
+
+    setUseFirestore(true)
+
+    const docsQuery = query(collection(db, 'documents'), orderBy('updated_at', 'desc'))
+    const unsubDocs = onSnapshot(docsQuery, (snapshot) => {
+      const docs = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        created_at: d.data().created_at?.toDate?.()?.toISOString() || d.data().created_at,
+        updated_at: d.data().updated_at?.toDate?.()?.toISOString() || d.data().updated_at,
+      }))
+      if (docs.length > 0) setDocuments(docs)
+    }, () => {
+      // Firestore error — fall back to demo data
+      setUseFirestore(false)
+    })
+
+    const stepsQuery = query(collection(db, 'onboarding_steps'), orderBy('display_order', 'asc'))
+    const unsubSteps = onSnapshot(stepsQuery, (snapshot) => {
+      const steps = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+      if (steps.length > 0) setOnboardingSteps(steps)
+    })
+
+    return () => {
+      unsubDocs()
+      unsubSteps()
+    }
+  }, [])
 
   const getDocumentsByCategory = useCallback((categoryId) => {
     return documents.filter((d) => d.category_id === categoryId && !d.is_archived)
@@ -344,27 +394,21 @@ export function DocumentProvider({ children }) {
     return catDocs.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0].updated_at
   }, [documents])
 
-  const searchDocuments = useCallback((query, filters = {}) => {
+  const searchDocuments = useCallback((q, filters = {}) => {
     let results = [...documents]
 
-    if (query) {
-      const q = query.toLowerCase()
+    if (q) {
+      const lower = q.toLowerCase()
       results = results.filter((d) =>
-        d.name.toLowerCase().includes(q) ||
-        (d.description && d.description.toLowerCase().includes(q)) ||
-        (d.tags && d.tags.some((t) => t.toLowerCase().includes(q)))
+        d.name.toLowerCase().includes(lower) ||
+        (d.description && d.description.toLowerCase().includes(lower)) ||
+        (d.tags && d.tags.some((t) => t.toLowerCase().includes(lower)))
       )
     }
 
-    if (filters.category) {
-      results = results.filter((d) => d.category_id === filters.category)
-    }
-    if (filters.fileType) {
-      results = results.filter((d) => d.file_type === filters.fileType)
-    }
-    if (filters.includeArchived !== true) {
-      results = results.filter((d) => !d.is_archived)
-    }
+    if (filters.category) results = results.filter((d) => d.category_id === filters.category)
+    if (filters.fileType) results = results.filter((d) => d.file_type === filters.fileType)
+    if (filters.includeArchived !== true) results = results.filter((d) => !d.is_archived)
 
     if (filters.sort === 'oldest') {
       results.sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at))
@@ -377,49 +421,92 @@ export function DocumentProvider({ children }) {
     return results
   }, [documents])
 
-  const addDocument = useCallback((doc) => {
-    const newDoc = {
-      ...doc,
-      id: String(Date.now()),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      is_archived: false,
+  const addDocument = useCallback(async (docData) => {
+    if (useFirestore) {
+      await addDoc(collection(db, 'documents'), {
+        ...docData,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+        is_archived: false,
+      })
+    } else {
+      const newDoc = {
+        ...docData,
+        id: String(Date.now()),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_archived: false,
+      }
+      setDocuments((prev) => [newDoc, ...prev])
+      return newDoc
     }
-    setDocuments((prev) => [newDoc, ...prev])
-    return newDoc
-  }, [])
+  }, [useFirestore])
 
-  const updateDocument = useCallback((id, updates) => {
-    setDocuments((prev) =>
-      prev.map((d) =>
-        d.id === id ? { ...d, ...updates, updated_at: new Date().toISOString() } : d
+  const updateDocument = useCallback(async (id, updates) => {
+    if (useFirestore) {
+      await updateDoc(doc(db, 'documents', id), {
+        ...updates,
+        updated_at: serverTimestamp(),
+      })
+    } else {
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === id ? { ...d, ...updates, updated_at: new Date().toISOString() } : d
+        )
       )
-    )
-  }, [])
-
-  const deleteDocument = useCallback((id) => {
-    setDocuments((prev) => prev.filter((d) => d.id !== id))
-  }, [])
-
-  const addOnboardingStep = useCallback((step) => {
-    const newStep = {
-      ...step,
-      id: String(Date.now()),
-      display_order: onboardingSteps.length + 1,
-      is_active: true,
     }
-    setOnboardingSteps((prev) => [...prev, newStep])
-  }, [onboardingSteps])
+  }, [useFirestore])
 
-  const updateOnboardingStep = useCallback((id, updates) => {
-    setOnboardingSteps((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
-    )
-  }, [])
+  const deleteDocument = useCallback(async (id) => {
+    if (useFirestore) {
+      await deleteDoc(doc(db, 'documents', id))
+    } else {
+      setDocuments((prev) => prev.filter((d) => d.id !== id))
+    }
+  }, [useFirestore])
 
-  const deleteOnboardingStep = useCallback((id) => {
-    setOnboardingSteps((prev) => prev.filter((s) => s.id !== id))
-  }, [])
+  const uploadFile = useCallback(async (file) => {
+    if (!useFirestore) return URL.createObjectURL(file)
+    const fileRef = ref(storage, `documents/${Date.now()}_${file.name}`)
+    await uploadBytes(fileRef, file)
+    return getDownloadURL(fileRef)
+  }, [useFirestore])
+
+  const addOnboardingStep = useCallback(async (step) => {
+    if (useFirestore) {
+      await addDoc(collection(db, 'onboarding_steps'), {
+        ...step,
+        display_order: onboardingSteps.length + 1,
+        is_active: true,
+      })
+    } else {
+      const newStep = {
+        ...step,
+        id: String(Date.now()),
+        display_order: onboardingSteps.length + 1,
+        is_active: true,
+      }
+      setOnboardingSteps((prev) => [...prev, newStep])
+    }
+  }, [useFirestore, onboardingSteps])
+
+  const updateOnboardingStep = useCallback(async (id, updates) => {
+    if (useFirestore) {
+      await updateDoc(doc(db, 'onboarding_steps', id), updates)
+    } else {
+      setOnboardingSteps((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+      )
+    }
+  }, [useFirestore])
+
+  const deleteOnboardingStep = useCallback(async (id) => {
+    if (useFirestore) {
+      await deleteDoc(doc(db, 'onboarding_steps', id))
+    } else {
+      setOnboardingSteps((prev) => prev.filter((s) => s.id !== id))
+    }
+  }, [useFirestore])
 
   const reorderOnboardingSteps = useCallback((newOrder) => {
     setOnboardingSteps(newOrder.map((s, i) => ({ ...s, display_order: i + 1 })))
@@ -441,6 +528,7 @@ export function DocumentProvider({ children }) {
         addDocument,
         updateDocument,
         deleteDocument,
+        uploadFile,
         addOnboardingStep,
         updateOnboardingStep,
         deleteOnboardingStep,

@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: check if user is admin
+    function isAdmin() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper: check allowed email domains
+    function isAllowedDomain() {
+      return isAuth() &&
+        (request.auth.token.email.matches('.*@huahed[.]com') ||
+         request.auth.token.email.matches('.*@procandid[.]com'));
+    }
+
+    // Documents collection
+    match /documents/{docId} {
+      allow read: if isAuth() && isAllowedDomain();
+      allow create: if isAuth() && isAllowedDomain();
+      allow update: if isAdmin() ||
+        (isAuth() && resource.data.uploaded_by == request.auth.token.email);
+      allow delete: if isAdmin();
+    }
+
+    // Onboarding steps
+    match /onboarding_steps/{stepId} {
+      allow read: if isAuth() && isAllowedDomain();
+      allow write: if isAdmin();
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isAuth() && isAllowedDomain();
+      allow create, update: if isAuth() && request.auth.uid == userId;
+    }
+  }
+}
