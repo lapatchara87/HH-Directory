@@ -7,6 +7,8 @@ import CategoryPage from './pages/CategoryPage'
 import SearchPage from './pages/SearchPage'
 import OnboardingPage from './pages/OnboardingPage'
 import AdminPage from './pages/AdminPage'
+import BookmarksPage from './pages/BookmarksPage'
+import RecentPage from './pages/RecentPage'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }) {
@@ -36,6 +38,8 @@ export default function App() {
                   <Route path="/" element={<HomePage />} />
                   <Route path="/category/:slug" element={<CategoryPage />} />
                   <Route path="/search" element={<SearchPage />} />
+                  <Route path="/bookmarks" element={<BookmarksPage />} />
+                  <Route path="/recent" element={<RecentPage />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/:tab" element={<AdminPage />} />
