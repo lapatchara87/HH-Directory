@@ -121,21 +121,19 @@ export default function FileCard({ document, onPreview, compact = false, showAct
         </div>
       </button>
 
-      {/* Tags & actions bar */}
+      {/* Tags & actions bar — always visible */}
       <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
         <button onClick={handleBookmark} className="p-1 rounded hover:bg-slate-100">
           <Star className={`w-4 h-4 ${bookmarked ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-amber-400'}`} />
         </button>
 
         {tags.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-50 text-primary-700 rounded-full text-[10px] font-medium">
+          <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-50 text-violet-700 rounded-full text-[10px] font-medium">
             <Tag className="w-2.5 h-2.5" />
             {tag}
-            {showActions && (
-              <button onClick={(e) => { e.stopPropagation(); removeTag(document.id, tag) }} className="hover:text-red-500">
-                <X className="w-2.5 h-2.5" />
-              </button>
-            )}
+            <button onClick={(e) => { e.stopPropagation(); removeTag(document.id, tag) }} className="hover:text-red-500 ml-0.5">
+              <X className="w-2.5 h-2.5" />
+            </button>
           </span>
         ))}
 
@@ -144,11 +142,11 @@ export default function FileCard({ document, onPreview, compact = false, showAct
             <input
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
-              placeholder="แท็ก..."
-              className="w-20 px-2 py-0.5 text-xs border border-slate-200 rounded-full focus:outline-none focus:ring-1 focus:ring-primary-500"
+              placeholder="พิมพ์แท็ก..."
+              className="w-24 px-2 py-0.5 text-xs border border-violet-300 rounded-full focus:outline-none focus:ring-1 focus:ring-violet-500 bg-violet-50"
               autoFocus
             />
-            <button type="submit" className="text-primary-500 hover:text-primary-700">
+            <button type="submit" className="text-violet-500 hover:text-violet-700">
               <Plus className="w-3.5 h-3.5" />
             </button>
             <button type="button" onClick={(e) => { e.stopPropagation(); setShowTagInput(false) }} className="text-slate-400">
@@ -158,7 +156,7 @@ export default function FileCard({ document, onPreview, compact = false, showAct
         ) : (
           <button
             onClick={(e) => { e.stopPropagation(); setShowTagInput(true) }}
-            className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] text-slate-400 hover:text-primary-500 hover:bg-primary-50 rounded-full transition-colors"
+            className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-full transition-colors border border-dashed border-slate-300 hover:border-violet-300"
           >
             <Plus className="w-2.5 h-2.5" />
             แท็ก
