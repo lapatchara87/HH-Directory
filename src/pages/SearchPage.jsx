@@ -3,13 +3,13 @@ import { useSearchParams } from 'react-router-dom'
 import { useDocuments } from '../contexts/DocumentContext'
 import FileCard from '../components/FileCard'
 import FilePreviewModal from '../components/FilePreviewModal'
-import { Search, SlidersHorizontal, Star, Clock, Tag } from 'lucide-react'
+import { Search, SlidersHorizontal, Star, Clock, Tag, Hash } from 'lucide-react'
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const {
-    searchDocuments, searchQuery, setSearchQuery, categories,
-    getAllUploaders, getAllUniqueTags, getBookmarkedDocs, getRecentlyViewedDocs,
+    searchDocuments, searchQuery, setSearchQuery, categories, documents,
+    getAllUploaders, getAllUniqueTags, getBookmarkedDocs, getRecentlyViewedDocs, getTagsForDoc,
   } = useDocuments()
   const [previewDoc, setPreviewDoc] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
@@ -23,7 +23,8 @@ export default function SearchPage() {
   const [sortBy, setSortBy] = useState('latest')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
-  const [activeView, setActiveView] = useState('search') // 'search' | 'bookmarks' | 'recent'
+  const [activeView, setActiveView] = useState('search') // 'search' | 'bookmarks' | 'recent' | 'tags'
+  const [selectedTag, setSelectedTag] = useState(null)
 
   const query = searchParams.get('q') || searchQuery
 
@@ -64,8 +65,13 @@ export default function SearchPage() {
   const bookmarkedDocs = getBookmarkedDocs()
   const recentDocs = getRecentlyViewedDocs(20)
 
+  const taggedDocs = selectedTag
+    ? documents.filter((d) => (getTagsForDoc(d.id) || []).includes(selectedTag))
+    : documents.filter((d) => (getTagsForDoc(d.id) || []).length > 0)
+
   const displayDocs = activeView === 'bookmarks' ? bookmarkedDocs
     : activeView === 'recent' ? recentDocs
+    : activeView === 'tags' ? taggedDocs
     : results
 
   const hasActiveFilters = filterCategory || filterType || filterUploader || filterTag || filterDateFrom || filterDateTo || bookmarkedOnly
@@ -124,7 +130,43 @@ export default function SearchPage() {
           <Clock className="w-3.5 h-3.5" />
           เพิ่งเปิด ({recentDocs.length})
         </button>
+        <button
+          onClick={() => { setActiveView('tags'); setSelectedTag(null) }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            activeView === 'tags' ? 'bg-violet-100 text-violet-700' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Tag className="w-3.5 h-3.5" />
+          แท็ก ({allTags.length})
+        </button>
       </div>
+
+      {/* Tag filter chips — show when tags tab is active */}
+      {activeView === 'tags' && allTags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedTag(null)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              !selectedTag ? 'bg-violet-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-violet-50'
+            }`}
+          >ทั้งหมด ({documents.filter((d) => (getTagsForDoc(d.id) || []).length > 0).length})</button>
+          {allTags.map((tag) => {
+            const count = documents.filter((d) => (getTagsForDoc(d.id) || []).includes(tag)).length
+            return (
+              <button
+                key={tag}
+                onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex items-center gap-1 ${
+                  selectedTag === tag ? 'bg-violet-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-violet-50 hover:border-violet-300'
+                }`}
+              >
+                <Hash className="w-3 h-3" />
+                {tag} ({count})
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Filters — only for search view */}
       {showFilters && activeView === 'search' && (
@@ -231,6 +273,8 @@ export default function SearchPage() {
             <>ไฟล์ที่ปักหมุด <span className="font-medium text-slate-700">{displayDocs.length}</span> ไฟล์</>
           ) : activeView === 'recent' ? (
             <>เพิ่งเปิดดู <span className="font-medium text-slate-700">{displayDocs.length}</span> ไฟล์</>
+          ) : activeView === 'tags' ? (
+            <>{selectedTag ? <><span className="font-medium text-violet-600">#{selectedTag}</span> — </> : 'ไฟล์ที่ติดแท็ก '}<span className="font-medium text-slate-700">{displayDocs.length}</span> ไฟล์</>
           ) : query ? (
             <>พบ <span className="font-medium text-slate-700">{displayDocs.length}</span> ผลลัพธ์สำหรับ &ldquo;{query}&rdquo;{searching && ' (กำลังค้นหา...)'}</>
           ) : (
@@ -249,6 +293,12 @@ export default function SearchPage() {
               <>
                 <Clock className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-slate-500">ยังไม่มีไฟล์ที่เปิดดู</p>
+              </>
+            ) : activeView === 'tags' ? (
+              <>
+                <Tag className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500">ยังไม่มีไฟล์ที่ติดแท็ก</p>
+                <p className="text-sm text-slate-400 mt-1">กดปุ่ม "+ แท็ก" ที่ไฟล์เพื่อเพิ่มแท็ก</p>
               </>
             ) : (
               <>
