@@ -14,6 +14,8 @@ import {
   ChevronDown,
   Star,
   Clock,
+  Tag,
+  FolderOpen,
 } from 'lucide-react'
 import UploadModal from './UploadModal'
 
@@ -28,8 +30,9 @@ export default function Layout({ children }) {
 
   const navLinks = [
     { to: '/', label: 'หน้าหลัก', icon: Home },
-    { to: '/directory', label: 'ไดเรกทอรี่', icon: Search },
+    { to: '/directory', label: 'ไดเรกทอรี่', icon: FolderOpen },
     { to: '/bookmarks', label: 'ปักหมุด', icon: Star },
+    { to: '/tags', label: 'แท็ก', icon: Tag },
     { to: '/recent', label: 'เพิ่งเปิด', icon: Clock },
     { to: '/onboarding', label: 'Start Here', icon: Rocket },
     ...(isAdmin ? [{ to: '/admin', label: 'Admin', icon: Settings }] : []),

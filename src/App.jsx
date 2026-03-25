@@ -10,6 +10,7 @@ import AdminPage from './pages/AdminPage'
 import BookmarksPage from './pages/BookmarksPage'
 import RecentPage from './pages/RecentPage'
 import DirectoryPage from './pages/DirectoryPage'
+import TagsPage from './pages/TagsPage'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }) {
@@ -41,6 +42,7 @@ export default function App() {
                   <Route path="/directory" element={<DirectoryPage />} />
                   <Route path="/search" element={<SearchPage />} />
                   <Route path="/bookmarks" element={<BookmarksPage />} />
+                  <Route path="/tags" element={<TagsPage />} />
                   <Route path="/recent" element={<RecentPage />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
                   <Route path="/admin" element={<AdminPage />} />
