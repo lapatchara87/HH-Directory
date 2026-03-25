@@ -35,6 +35,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Shared document tags (visible to all, editable by all authenticated users)
+    match /document_tags/{docId} {
+      allow read: if isAuth() && isAllowedDomain();
+      allow write: if isAuth() && isAllowedDomain();
+    }
+
     // User profiles
     match /users/{userId} {
       allow read: if isAuth() && isAllowedDomain();

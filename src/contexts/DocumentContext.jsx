@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { useAuth } from './AuthContext'
 import { discoverAllDriveContent, searchDriveFiles } from '../lib/drive'
+import { collection, doc, onSnapshot, setDoc, deleteField } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import * as prefs from '../lib/userPrefs'
 
 const DocumentContext = createContext(null)
@@ -30,7 +32,29 @@ export function DocumentProvider({ children }) {
   const [driveError, setDriveError] = useState(null)
   const [bookmarks, setBookmarks] = useState(prefs.getBookmarks())
   const [recentlyViewed, setRecentlyViewed] = useState(prefs.getRecentlyViewed())
-  const [documentTags, setDocumentTags] = useState(prefs.getAllTags())
+  const [sharedTags, setSharedTags] = useState({}) // { docId: ['tag1', 'tag2'] } from Firestore
+
+  // Listen to shared tags from Firestore (real-time, all users see same tags)
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, 'document_tags'),
+      (snapshot) => {
+        const tags = {}
+        snapshot.docs.forEach((d) => {
+          const data = d.data()
+          if (data.tags && data.tags.length > 0) {
+            tags[d.id] = data.tags
+          }
+        })
+        setSharedTags(tags)
+      },
+      () => {
+        // Firestore not available — fall back to localStorage
+        setSharedTags(prefs.getAllTags())
+      }
+    )
+    return () => unsubscribe()
+  }, [])
 
   useEffect(() => {
     if (!accessToken) return
@@ -126,8 +150,7 @@ export function DocumentProvider({ children }) {
       results = results.filter((d) => new Date(d.updated_at) <= to)
     }
     if (filters.tag) {
-      const docIds = prefs.getDocIdsByTag(filters.tag)
-      results = results.filter((d) => docIds.includes(d.id))
+      results = results.filter((d) => (sharedTags[d.id] || []).includes(filters.tag))
     }
     if (filters.bookmarkedOnly) {
       results = results.filter((d) => bookmarks.includes(d.id))
@@ -181,24 +204,40 @@ export function DocumentProvider({ children }) {
       .filter(Boolean)
   }, [documents, recentlyViewed])
 
-  // Tags
-  const addTag = useCallback((docId, tag) => {
-    prefs.addTagToDoc(docId, tag)
-    setDocumentTags({ ...prefs.getAllTags() })
-  }, [])
+  // Tags — shared via Firestore (all users see same tags)
+  const addTag = useCallback(async (docId, tag) => {
+    const currentTags = sharedTags[docId] || []
+    if (!currentTags.includes(tag)) {
+      const newTags = [...currentTags, tag]
+      try {
+        await setDoc(doc(db, 'document_tags', docId), { tags: newTags }, { merge: true })
+      } catch {
+        // Firestore unavailable — fall back to localStorage
+        prefs.addTagToDoc(docId, tag)
+        setSharedTags((prev) => ({ ...prev, [docId]: newTags }))
+      }
+    }
+  }, [sharedTags])
 
-  const removeTag = useCallback((docId, tag) => {
-    prefs.removeTagFromDoc(docId, tag)
-    setDocumentTags({ ...prefs.getAllTags() })
-  }, [])
+  const removeTag = useCallback(async (docId, tag) => {
+    const currentTags = (sharedTags[docId] || []).filter((t) => t !== tag)
+    try {
+      await setDoc(doc(db, 'document_tags', docId), { tags: currentTags }, { merge: true })
+    } catch {
+      prefs.removeTagFromDoc(docId, tag)
+      setSharedTags((prev) => ({ ...prev, [docId]: currentTags }))
+    }
+  }, [sharedTags])
 
   const getTagsForDoc = useCallback((docId) => {
-    return documentTags[docId] || []
-  }, [documentTags])
+    return sharedTags[docId] || []
+  }, [sharedTags])
 
   const getAllUniqueTags = useCallback(() => {
-    return prefs.getAllUniqueTags()
-  }, [documentTags])
+    const tagSet = new Set()
+    Object.values(sharedTags).forEach((tags) => tags.forEach((t) => tagSet.add(t)))
+    return [...tagSet].sort()
+  }, [sharedTags])
 
   // Unique uploaders for filter
   const getAllUploaders = useCallback(() => {
