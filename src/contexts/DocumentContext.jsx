@@ -139,10 +139,17 @@ export function DocumentProvider({ children }) {
     }
     if (q) {
       const lower = q.toLowerCase()
-      results = results.filter((d) =>
-        d.name.toLowerCase().includes(lower) ||
-        (d.description && d.description.toLowerCase().includes(lower))
-      )
+      results = results.filter((d) => {
+        const docTags = sharedTags[d.id] || []
+        return (
+          d.name.toLowerCase().includes(lower) ||
+          (d.description && d.description.toLowerCase().includes(lower)) ||
+          (d.uploader_name && d.uploader_name.toLowerCase().includes(lower)) ||
+          (d.uploaded_by && d.uploaded_by.toLowerCase().includes(lower)) ||
+          (d.category_name && d.category_name.toLowerCase().includes(lower)) ||
+          docTags.some((t) => t.toLowerCase().includes(lower))
+        )
+      })
     }
     if (filters.category) results = results.filter((d) => d.category_id === filters.category)
     if (filters.fileType) results = results.filter((d) => d.file_type === filters.fileType)
