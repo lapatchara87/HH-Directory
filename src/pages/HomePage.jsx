@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useDocuments } from '../contexts/DocumentContext'
 import { useAuth } from '../contexts/AuthContext'
 import FilePreviewModal from '../components/FilePreviewModal'
+import { SkeletonRow } from '../components/Skeleton'
 import {
   Search, FolderOpen, Clock, Star, ArrowRight, RefreshCw, Plug,
   FileText, Table, Presentation, FileDown, Image, Video, ExternalLink,
@@ -177,6 +178,11 @@ export default function HomePage() {
             {recentDocs.map((doc) => (
               <MiniFileItem key={doc.id} doc={doc} onClick={() => openFile(doc)} />
             ))}
+            {recentDocs.length === 0 && driveLoading && (
+              <div className="space-y-2 p-2">
+                {[1, 2, 3, 4].map((i) => <SkeletonRow key={i} />)}
+              </div>
+            )}
             {recentDocs.length === 0 && !driveLoading && (
               <div className="p-6 text-center text-sm text-slate-400">ยังไม่มีไฟล์</div>
             )}

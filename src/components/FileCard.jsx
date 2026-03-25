@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import {
   FileText, Table, Presentation, Image, FileDown, Video,
-  ExternalLink, Clock, User, Star, Tag, Plus, X,
+  ExternalLink, Clock, User, Star, Tag, Plus, X, Link2,
 } from 'lucide-react'
 import { useDocuments } from '../contexts/DocumentContext'
+import { useToast } from '../contexts/ToastContext'
 
 const FILE_TYPE_CONFIG = {
   google_doc: { icon: FileText, label: 'Google Docs', color: 'text-blue-600 bg-blue-50' },
@@ -28,6 +29,7 @@ function formatDate(dateString) {
 
 export default function FileCard({ document, onPreview, compact = false, showActions = false }) {
   const { toggleBookmark, isBookmarked, trackView, addTag, removeTag, getTagsForDoc } = useDocuments()
+  const { showToast } = useToast()
   const config = FILE_TYPE_CONFIG[document.file_type] || FILE_TYPE_CONFIG.link
   const Icon = config.icon
   const bookmarked = isBookmarked(document.id)
@@ -51,13 +53,28 @@ export default function FileCard({ document, onPreview, compact = false, showAct
 
   function handleBookmark(e) {
     e.stopPropagation()
+    const wasBookmarked = bookmarked
     toggleBookmark(document.id)
+    showToast(wasBookmarked ? 'ยกเลิกปักหมุดแล้ว' : 'ปักหมุดแล้ว', 'bookmark')
+  }
+
+  function handleCopyLink(e) {
+    e.stopPropagation()
+    const url = document.drive_link || document.file_url || ''
+    if (url) {
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('คัดลอกลิงก์แล้ว', 'copy')
+      }).catch(() => {
+        showToast('ไม่สามารถคัดลอกได้', 'error')
+      })
+    }
   }
 
   function handleAddTag(e) {
     e.stopPropagation()
     if (newTag.trim()) {
       addTag(document.id, newTag.trim())
+      showToast(`เพิ่มแท็ก "${newTag.trim()}" แล้ว`, 'tag')
       setNewTag('')
       setShowTagInput(false)
     }
@@ -123,8 +140,11 @@ export default function FileCard({ document, onPreview, compact = false, showAct
 
       {/* Tags & actions bar — always visible */}
       <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
-        <button onClick={handleBookmark} className="p-1 rounded hover:bg-slate-100">
+        <button onClick={handleBookmark} className="p-1 rounded hover:bg-slate-100" title="ปักหมุด">
           <Star className={`w-4 h-4 ${bookmarked ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-amber-400'}`} />
+        </button>
+        <button onClick={handleCopyLink} className="p-1 rounded hover:bg-slate-100" title="คัดลอกลิงก์">
+          <Link2 className="w-4 h-4 text-slate-300 hover:text-blue-500" />
         </button>
 
         {tags.map((tag) => (
