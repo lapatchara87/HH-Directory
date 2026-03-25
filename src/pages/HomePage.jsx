@@ -2,206 +2,158 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDocuments } from '../contexts/DocumentContext'
 import { useAuth } from '../contexts/AuthContext'
-import FileCard from '../components/FileCard'
 import FilePreviewModal from '../components/FilePreviewModal'
 import {
   Search, FolderOpen, Clock, Star, ArrowRight,
-  FileText, Table, Presentation, FileDown, Image, Video,
+  FileText, Table, Presentation, FileDown, Image, Video, ExternalLink,
 } from 'lucide-react'
 
-const FILE_TYPE_ICONS = {
+const TYPE_ICON = {
   google_doc: { icon: FileText, color: 'text-blue-500' },
   google_sheet: { icon: Table, color: 'text-green-500' },
-  google_slide: { icon: Presentation, color: 'text-yellow-500' },
+  google_slide: { icon: Presentation, color: 'text-yellow-600' },
   pdf: { icon: FileDown, color: 'text-red-500' },
   image: { icon: Image, color: 'text-purple-500' },
   video: { icon: Video, color: 'text-pink-500' },
+  link: { icon: ExternalLink, color: 'text-slate-400' },
 }
 
-function formatDate(dateString) {
+function timeAgo(dateString) {
   if (!dateString) return ''
-  const date = new Date(dateString)
-  const now = new Date()
-  const diff = now - date
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  const diff = Date.now() - new Date(dateString).getTime()
+  const days = Math.floor(diff / 86400000)
   if (days === 0) return 'วันนี้'
   if (days === 1) return 'เมื่อวาน'
   if (days < 7) return `${days} วันที่แล้ว`
-  return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+  return new Date(dateString).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
 }
 
 export default function HomePage() {
   const { user } = useAuth()
   const {
-    categories, documents, getRecentDocuments, getCategoryFileCount,
-    getCategoryLastUpdated, driveLoading, driveError, getBookmarkedDocs,
+    categories, documents, getRecentDocuments,
+    driveLoading, driveError, getBookmarkedDocs, trackView,
   } = useDocuments()
   const [previewDoc, setPreviewDoc] = useState(null)
   const [searchInput, setSearchInput] = useState('')
   const navigate = useNavigate()
 
-  const recentDocs = getRecentDocuments(5)
+  const recentDocs = getRecentDocuments(8)
   const bookmarkedDocs = getBookmarkedDocs()
-  const firstName = user?.displayName?.split(' ')[0] || 'คุณ'
+  const firstName = user?.displayName?.split(' ')[0] || ''
   const totalFiles = documents.filter((d) => !d.is_archived).length
 
   function handleSearch(e) {
     e.preventDefault()
-    if (searchInput.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchInput.trim())}`)
+    if (searchInput.trim()) navigate(`/search?q=${encodeURIComponent(searchInput.trim())}`)
+  }
+
+  function openFile(doc) {
+    trackView(doc.id)
+    if (['pdf', 'image'].includes(doc.file_type)) {
+      setPreviewDoc(doc)
+    } else if (doc.drive_link) {
+      window.open(doc.drive_link, '_blank', 'noopener,noreferrer')
     }
   }
 
   return (
     <div className="space-y-8 pb-8">
-      {/* Hero Section */}
+      {/* Hero */}
       <div className="bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl p-6 sm:p-8 text-white">
-        <h1 className="text-xl sm:text-2xl font-bold">
-          สวัสดี, {firstName} 👋
-        </h1>
-        <p className="text-primary-100 mt-1 text-sm sm:text-base">
-          ค้นหาเอกสารจาก {totalFiles > 0 ? `${totalFiles} ไฟล์ ใน ${categories.length} โฟลเดอร์` : 'Google Drive ของบริษัท'}
+        <p className="text-primary-200 text-sm">
+          {firstName ? `สวัสดี, ${firstName}` : 'สวัสดี'}
         </p>
+        <h1 className="text-xl sm:text-2xl font-bold mt-1">ค้นหาเอกสารบริษัท</h1>
 
-        {/* Search bar */}
-        <form onSubmit={handleSearch} className="mt-5">
+        <form onSubmit={handleSearch} className="mt-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="ค้นหาชื่อไฟล์ คนอัปโหลด หรืออะไรก็ได้..."
-              className="w-full pl-12 pr-4 py-3.5 bg-white text-slate-900 rounded-xl text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-white/50 shadow-lg placeholder:text-slate-400"
+              placeholder="พิมพ์ชื่อไฟล์ หรือคำที่ต้องการหา..."
+              className="w-full pl-12 pr-4 py-3.5 bg-white text-slate-900 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-white/50 shadow-lg placeholder:text-slate-400"
             />
           </div>
         </form>
 
-        {/* Quick stats */}
-        <div className="flex gap-6 mt-5 text-sm">
-          <div>
-            <span className="text-2xl font-bold">{totalFiles}</span>
-            <span className="text-primary-200 ml-1">ไฟล์</span>
-          </div>
-          <div>
-            <span className="text-2xl font-bold">{categories.length}</span>
-            <span className="text-primary-200 ml-1">โฟลเดอร์</span>
-          </div>
-          {bookmarkedDocs.length > 0 && (
-            <div>
-              <span className="text-2xl font-bold">{bookmarkedDocs.length}</span>
-              <span className="text-primary-200 ml-1">ปักหมุด</span>
-            </div>
-          )}
+        <div className="flex items-center gap-4 mt-4 text-sm text-primary-200">
+          <span><strong className="text-white">{totalFiles}</strong> ไฟล์</span>
+          <span><strong className="text-white">{categories.length}</strong> โฟลเดอร์</span>
         </div>
       </div>
 
-      {/* Loading / Error */}
+      {/* Status */}
       {driveLoading && (
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 flex items-center gap-3">
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary-500 border-t-transparent" />
-          <div>
-            <p className="text-sm font-medium text-primary-700">กำลังโหลดไฟล์จาก Google Drive...</p>
-            <p className="text-xs text-primary-500 mt-0.5">อาจใช้เวลาสักครู่ถ้ามีไฟล์เยอะ</p>
-          </div>
+          <p className="text-sm text-primary-700">กำลังโหลดไฟล์จาก Google Drive...</p>
         </div>
       )}
-
       {driveError && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
           <p className="text-sm text-red-700">{driveError}</p>
         </div>
       )}
 
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column — Folders (2/3 width) */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Folders */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <FolderOpen className="w-5 h-5 text-primary-500" />
-                โฟลเดอร์
-              </h2>
-              <span className="text-xs text-slate-400">{categories.length} โฟลเดอร์</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {categories.map((category) => {
-                const fileCount = getCategoryFileCount(category.id)
-                const lastUpdated = getCategoryLastUpdated(category.id)
-
-                return (
-                  <Link
-                    key={category.id}
-                    to={`/category/${category.slug}`}
-                    className="bg-white rounded-xl border border-slate-200 p-4 hover:border-primary-300 hover:shadow-md transition-all group"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${category.color} text-white`}>
-                        <FolderOpen className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">
-                        {fileCount}
-                      </span>
-                    </div>
-                    <h3 className="font-medium text-slate-900 text-sm mt-3 group-hover:text-primary-600 transition-colors line-clamp-2 leading-snug">
-                      {category.name}
-                    </h3>
-                    {lastUpdated && (
-                      <p className="text-[11px] text-slate-400 mt-2">{formatDate(lastUpdated)}</p>
-                    )}
-                  </Link>
-                )
-              })}
-            </div>
-          </section>
+      {/* Quick Access: Directory shortcut */}
+      <Link
+        to="/directory"
+        className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4 hover:border-primary-300 hover:shadow-sm transition-all group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center">
+            <FolderOpen className="w-5 h-5 text-primary-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-900 text-sm group-hover:text-primary-600">ไดเรกทอรี่</h3>
+            <p className="text-xs text-slate-500">ดูโฟลเดอร์ทั้งหมด {categories.length} โฟลเดอร์</p>
+          </div>
         </div>
+        <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-primary-500 transition-colors" />
+      </Link>
 
-        {/* Right Column — Recent & Bookmarks (1/3 width) */}
-        <div className="space-y-6">
-          {/* Bookmarks */}
-          {bookmarkedDocs.length > 0 && (
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
-                  <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                  ปักหมุด
-                </h2>
-                <Link to="/search" className="text-xs text-primary-500 hover:text-primary-700 flex items-center gap-0.5">
-                  ดูทั้งหมด <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-              <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-                {bookmarkedDocs.slice(0, 5).map((doc) => (
-                  <QuickFileItem key={doc.id} document={doc} onPreview={setPreviewDoc} />
-                ))}
-              </div>
-            </section>
+      {/* Bookmarked — show only if has bookmarks */}
+      {bookmarkedDocs.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+              ปักหมุดของฉัน
+            </h2>
+            <Link to="/bookmarks" className="text-xs text-primary-500 hover:text-primary-700 flex items-center gap-0.5">
+              ดูทั้งหมด <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="grid gap-2">
+            {bookmarkedDocs.slice(0, 4).map((doc) => (
+              <FileRow key={doc.id} doc={doc} onClick={() => openFile(doc)} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Recently Updated */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-slate-400" />
+            อัปเดตล่าสุด
+          </h2>
+        </div>
+        <div className="grid gap-2">
+          {recentDocs.map((doc) => (
+            <FileRow key={doc.id} doc={doc} onClick={() => openFile(doc)} />
+          ))}
+          {recentDocs.length === 0 && !driveLoading && (
+            <div className="text-center py-8 bg-white rounded-xl border border-slate-200">
+              <p className="text-sm text-slate-400">ยังไม่มีไฟล์</p>
+            </div>
           )}
-
-          {/* Recently Updated */}
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-primary-500" />
-                อัปเดตล่าสุด
-              </h2>
-              <Link to="/search" className="text-xs text-primary-500 hover:text-primary-700 flex items-center gap-0.5">
-                ดูทั้งหมด <ArrowRight className="w-3 h-3" />
-              </Link>
-            </div>
-            <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-              {recentDocs.map((doc) => (
-                <QuickFileItem key={doc.id} document={doc} onPreview={setPreviewDoc} />
-              ))}
-              {recentDocs.length === 0 && (
-                <div className="p-4 text-center text-sm text-slate-400">ยังไม่มีไฟล์</div>
-              )}
-            </div>
-          </section>
         </div>
-      </div>
+      </section>
 
       {previewDoc && (
         <FilePreviewModal document={previewDoc} onClose={() => setPreviewDoc(null)} />
@@ -210,37 +162,29 @@ export default function HomePage() {
   )
 }
 
-// Minimal file item for sidebar lists
-function QuickFileItem({ document, onPreview }) {
-  const { trackView } = useDocuments()
-  const typeConfig = FILE_TYPE_ICONS[document.file_type] || { icon: FileText, color: 'text-slate-400' }
+// Clean, minimal file row
+function FileRow({ doc, onClick }) {
+  const typeConfig = TYPE_ICON[doc.file_type] || TYPE_ICON.link
   const TypeIcon = typeConfig.icon
-
-  function handleClick() {
-    trackView(document.id)
-    const { file_type, drive_link } = document
-    if (['pdf', 'image'].includes(file_type) && onPreview) {
-      onPreview(document)
-    } else if (drive_link) {
-      window.open(drive_link, '_blank', 'noopener,noreferrer')
-    }
-  }
 
   return (
     <button
-      onClick={handleClick}
-      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors text-left group"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 bg-white rounded-xl border border-slate-200 px-4 py-3 hover:border-primary-200 hover:shadow-sm transition-all text-left group"
     >
-      <TypeIcon className={`w-4 h-4 shrink-0 ${typeConfig.color}`} />
+      <div className={`w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0`}>
+        <TypeIcon className={`w-4 h-4 ${typeConfig.color}`} />
+      </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-slate-800 truncate group-hover:text-primary-600 transition-colors">
-          {document.name}
+        <p className="text-sm font-medium text-slate-800 truncate group-hover:text-primary-600 transition-colors">
+          {doc.name}
         </p>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          {formatDate(document.updated_at)}
-          {document.uploader_name && ` · ${document.uploader_name}`}
+          {timeAgo(doc.updated_at)}
+          {doc.uploader_name && <span className="ml-2">{doc.uploader_name}</span>}
         </p>
       </div>
+      <ArrowRight className="w-4 h-4 text-slate-200 group-hover:text-primary-400 shrink-0" />
     </button>
   )
 }

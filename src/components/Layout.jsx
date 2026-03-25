@@ -28,6 +28,7 @@ export default function Layout({ children }) {
 
   const navLinks = [
     { to: '/', label: 'หน้าหลัก', icon: Home },
+    { to: '/directory', label: 'ไดเรกทอรี่', icon: Search },
     { to: '/bookmarks', label: 'ปักหมุด', icon: Star },
     { to: '/recent', label: 'เพิ่งเปิด', icon: Clock },
     { to: '/onboarding', label: 'Start Here', icon: Rocket },
