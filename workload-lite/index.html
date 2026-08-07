@@ -631,8 +631,10 @@ a { color: inherit; }
     ]);
   }
 
-  // Pull the shared board from the database. If the table is empty, seed it with
-  // whatever is currently loaded (sample data on first run, or migrated local data).
+  // Pull the shared board from the database. When online, the database is the
+  // single source of truth — an empty table means an intentionally empty board
+  // (it is NOT auto-seeded). Sample data is only available offline on a truly
+  // fresh browser, or on demand via the "Reset sample" button.
   async function syncFromDb() {
     if (!supabase) { setSyncStatus('offline'); return; }
     setSyncStatus('syncing');
@@ -640,16 +642,10 @@ a { color: inherit; }
       const { data, error } = await withTimeout(supabase.from(DB_TABLE).select('id, data').order('id'));
       if (error) throw error;
       dbReady = true;
-      if (data && data.length > 0) {
-        projects = data.map(row => normalizeProject(row.data));
-        snapshotSignatures();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-        renderAll();
-      } else {
-        // Empty shared board -> seed it from current local/sample projects.
-        lastSyncedById = {};
-        await pushDiffToDb();
-      }
+      projects = (data || []).map(row => normalizeProject(row.data));
+      snapshotSignatures();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+      renderAll();
       setSyncStatus('online');
     } catch (error) {
       console.warn('Could not reach the shared database, using local data:', error);
