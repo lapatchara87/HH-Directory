@@ -171,16 +171,24 @@ export function parsePageRef(raw) {
 
 // === GRAPH API ===
 async function graph(path, params, { token, version, signal }) {
-  if (!token) {
+  // ตัดช่องว่าง/บรรทัดใหม่ที่มักติดมาตอนคัดลอก Token
+  const cleanToken = (token || '').trim()
+  if (!cleanToken) {
     throw new FacebookError('ยังไม่ได้ใส่ Page Access Token', {
       hint: 'ดูวิธีสร้าง Token ได้ที่คู่มือด้านล่างของหน้านี้',
     })
   }
+  if (cleanToken.length < 50 || /\s/.test(cleanToken)) {
+    throw new FacebookError('Token ที่วางมาดูไม่ครบหรือมีอักขระแปลกปน', {
+      hint: 'กลับไปที่ Graph API Explorer กดไอคอนคัดลอกข้าง Access Token แล้ววางใหม่ทั้งเส้น (ขึ้นต้นด้วย EAA)',
+    })
+  }
+
   const url = new URL(`https://graph.facebook.com/${version || DEFAULT_GRAPH_VERSION}/${path}`)
   for (const [key, value] of Object.entries(params || {})) {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value)
   }
-  url.searchParams.set('access_token', token)
+  url.searchParams.set('access_token', cleanToken)
 
   let res
   try {
