@@ -64,6 +64,7 @@ export default function FbCommentsPage() {
   const [token, setToken] = useState(loadToken)
   const [showToken, setShowToken] = useState(false)
   const [rememberToken, setRememberToken] = useState(Boolean(loadToken()))
+  const [editToken, setEditToken] = useState(!loadToken())
   const [includeReplies, setIncludeReplies] = useState(saved.includeReplies ?? false)
   const [graphVersion, setGraphVersion] = useState(saved.graphVersion || DEFAULT_GRAPH_VERSION)
   const [maxComments, setMaxComments] = useState(saved.maxComments || 1000)
@@ -264,6 +265,18 @@ export default function FbCommentsPage() {
           </div>
         </div>
 
+        {!editToken && token ? (
+          <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm">
+            <Check className="w-4 h-4 text-green-600 shrink-0" />
+            <span className="text-green-800">บันทึก Page Access Token ไว้ในเครื่องนี้แล้ว</span>
+            <button
+              onClick={() => setEditToken(true)}
+              className="ml-auto text-green-700 hover:text-green-900 font-medium"
+            >
+              เปลี่ยน
+            </button>
+          </div>
+        ) : (
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Page Access Token</label>
           <div className="relative">
@@ -293,7 +306,16 @@ export default function FbCommentsPage() {
             />
             จำ Token ไว้ในเครื่องนี้ (เก็บใน localStorage — อย่าติ๊กถ้าใช้เครื่องสาธารณะ)
           </label>
+          {rememberToken && token.trim() && (
+            <button
+              onClick={() => setEditToken(false)}
+              className="mt-2 text-xs text-primary-600 hover:text-primary-700 font-medium"
+            >
+              บันทึกแล้วซ่อนช่องนี้
+            </button>
+          )}
         </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -362,8 +384,7 @@ export default function FbCommentsPage() {
         {pickerOpen && (
           <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-3">
             <p className="text-xs text-slate-500">
-              ใช้เมื่อคัดลอกลิงก์มาแล้วเป็นแบบ <code className="font-mono">pfbid</code> ซึ่ง Graph API อ่านไม่ได้ —
-              ใส่ลิงก์เพจแล้วเลือกโพสต์จากรายการ
+              ใช้เมื่อไม่มีลิงก์โพสต์อยู่ในมือ หรือระบบหาโพสต์จากลิงก์ไม่เจอ — ใส่ลิงก์เพจแล้วเลือกโพสต์จากรายการ
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
@@ -415,7 +436,7 @@ export default function FbCommentsPage() {
       {loading && (
         <div className="flex items-center gap-2 text-sm text-slate-600 bg-white border border-slate-200 rounded-xl px-4 py-3">
           <Loader2 className="w-4 h-4 animate-spin text-primary-600" />
-          กำลังดึงคอมเม้น... {progress > 0 ? `(${progress.toLocaleString()} รายการแล้ว)` : ''}
+          กำลังค้นหาโพสต์และดึงคอมเม้น... {progress > 0 ? `(${progress.toLocaleString()} รายการ)` : ''}
         </div>
       )}
 
@@ -576,7 +597,7 @@ export default function FbCommentsPage() {
             โดยขอสิทธิ์ <code className="font-mono">pages_read_engagement</code> และ{' '}
             <code className="font-mono">pages_read_user_content</code>
           </li>
-          <li>วางลิงก์โพสต์ที่มี ID เป็นตัวเลข — ถ้าเป็น pfbid ให้ใช้ปุ่มเลือกจากโพสต์ล่าสุดของเพจแทน</li>
+          <li>วางลิงก์โพสต์แบบไหนก็ได้ รวมถึงลิงก์ <code className="font-mono">pfbid</code> ที่คัดลอกจาก Facebook — ระบบจะไล่หาโพสต์ให้เอง</li>
         </ol>
         <p className="text-xs text-slate-500">
           Token ถูกใช้เรียก Facebook จากเบราว์เซอร์โดยตรง ไม่ถูกส่งไปเซิร์ฟเวอร์อื่น — ดูรายละเอียดเพิ่มที่ไฟล์

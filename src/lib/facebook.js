@@ -8,6 +8,7 @@ export const MAX_COMMENTS = 5000
 export const PAGE_SIZE = 100
 
 const FB_HOSTS = /(^|\.)(facebook\.com|fb\.com)$/i
+const keywordSet = new Set(['posts', 'videos', 'photos', 'photo', 'reel', 'reels', 'watch', 'video'])
 
 // === ERRORS ===
 export class FacebookError extends Error {
@@ -108,16 +109,19 @@ export function parsePostTarget(raw) {
     }
   }
 
-  // pfbid คือ ID แบบเข้ารหัส Graph API อ่านไม่ได้
-  if (segments.some((s) => s.startsWith('pfbid'))) {
+  // pfbid เป็น ID แบบเข้ารหัสที่ Graph API ถอดกลับไม่ได้
+  // แต่ permalink_url ของโพสต์ในเพจมี pfbid อยู่ จึงไล่จับคู่หาโพสต์ให้เองได้
+  const pfbid = segments.find((s) => s.startsWith('pfbid')) || q.get('story_fbid')
+  if (pfbid && pfbid.startsWith('pfbid')) {
+    const owner = segments[0] && !keywordSet.has(segments[0]) ? decodeURIComponent(segments[0]) : null
+    if (owner) return { pageRef: owner, pfbid }
     return {
-      error: 'ลิงก์แบบ pfbid ใช้กับ Graph API ไม่ได้',
-      hint: 'ใช้ปุ่ม "เลือกจากโพสต์ล่าสุดของเพจ" แล้วเลือกโพสต์ที่ต้องการ ระบบจะหยิบ Post ID ที่ถูกต้องให้เอง',
+      error: 'ลิงก์นี้ไม่มีชื่อเพจอยู่ในลิงก์ ระบบเลยหาโพสต์ให้ไม่ได้',
+      hint: 'ใช้ปุ่ม "เลือกจากโพสต์ล่าสุดของเพจ" แล้วเลือกโพสต์ที่ต้องการ',
     }
   }
 
-  const keywords = new Set(['posts', 'videos', 'photos', 'photo', 'reel', 'reels', 'watch', 'video'])
-  const idx = segments.findIndex((s) => keywords.has(s))
+  const idx = segments.findIndex((s) => keywordSet.has(s))
 
   if (idx >= 0) {
     // เอาเลขตัวสุดท้ายในเส้นทางเป็น object id เช่น /page/videos/slug/123456
@@ -206,8 +210,39 @@ async function graph(path, params, { token, version, signal }) {
 }
 
 // แปลง { pageRef, postId } ให้เป็น object id เต็ม
+const PFBID_SCAN_PAGES = 5
+const PFBID_SCAN_LIMIT = 100
+
+// ไล่ดูโพสต์ของเพจแล้วจับคู่ pfbid จาก permalink_url เพื่อหา Post ID ที่แท้จริง
+async function resolvePfbid({ pageRef, pfbid }, options) {
+  let after = null
+  let scanned = 0
+
+  for (let round = 0; round < PFBID_SCAN_PAGES; round += 1) {
+    const res = await graph(
+      `${encodeURIComponent(pageRef)}/posts`,
+      { fields: 'id,permalink_url', limit: PFBID_SCAN_LIMIT, after },
+      options
+    )
+    const posts = res?.data || []
+    scanned += posts.length
+    const hit = posts.find((post) => post.permalink_url?.includes(pfbid))
+    if (hit?.id) return hit.id
+
+    options.onProgress?.(scanned)
+    after = res?.paging?.next ? res?.paging?.cursors?.after : null
+    if (!after) break
+  }
+
+  throw new FacebookError(`หาโพสต์จากลิงก์นี้ไม่เจอในโพสต์ ${scanned} รายการล่าสุดของเพจ`, {
+    hint: 'ถ้าเป็นโพสต์เก่ามาก ให้ใช้ปุ่ม "เลือกจากโพสต์ล่าสุดของเพจ" แล้วเลือกเอง',
+  })
+}
+
 export async function resolveObjectId(target, options) {
   if (target.objectId) return target.objectId
+  if (target.pfbid) return resolvePfbid(target, options)
+
   const page = await graph(encodeURIComponent(target.pageRef), { fields: 'id' }, options)
   if (!page?.id) {
     throw new FacebookError('หา Page ID จากชื่อเพจในลิงก์ไม่เจอ', {
@@ -249,7 +284,7 @@ export async function fetchComments({
   const target = parsePostTarget(input)
   if (target.error) throw new FacebookError(target.error, { hint: target.hint })
 
-  const options = { token, version, signal }
+  const options = { token, version, signal, onProgress }
   const objectId = await resolveObjectId(target, options)
 
   const comments = []
