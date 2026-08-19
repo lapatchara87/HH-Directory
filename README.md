@@ -27,6 +27,7 @@ npm run dev
 - Upload documents (file upload or Google Drive link)
 - Onboarding checklist for new employees
 - Admin panel (manage documents, onboarding steps, dashboard)
+- Facebook comment aggregator — paste a page post link, get commenters + comments as a table (CSV/TSV export)
 - Fully responsive mobile-first UI
 - Demo mode: works without Firebase config for testing
 
@@ -44,3 +45,8 @@ See `SETUP.md` for step-by-step instructions (in Thai).
 | `VITE_FIREBASE_STORAGE_BUCKET` | Firebase Storage Bucket |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Messaging Sender ID |
 | `VITE_FIREBASE_APP_ID` | Firebase App ID |
+| `VITE_FB_GRAPH_VERSION` | (optional) Facebook Graph API version for the comment aggregator, default `v23.0` |
+
+## Facebook Comment Aggregator
+
+See `FACEBOOK_COMMENTS.md` for how to get a Page Access Token and use `/fb-comments` (in Thai).

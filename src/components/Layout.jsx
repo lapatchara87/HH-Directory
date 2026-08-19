@@ -16,6 +16,7 @@ import {
   Clock,
   Tag,
   FolderOpen,
+  MessageSquare,
 } from 'lucide-react'
 import UploadModal from './UploadModal'
 
@@ -34,6 +35,7 @@ export default function Layout({ children }) {
     { to: '/bookmarks', label: 'ปักหมุด', icon: Star },
     { to: '/tags', label: 'แท็ก', icon: Tag },
     { to: '/recent', label: 'เพิ่งเปิด', icon: Clock },
+    { to: '/fb-comments', label: 'คอมเม้น FB', icon: MessageSquare },
     { to: '/onboarding', label: 'Start Here', icon: Rocket },
     ...(isAdmin ? [{ to: '/admin', label: 'Admin', icon: Settings }] : []),
   ]
