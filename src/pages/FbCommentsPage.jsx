@@ -7,20 +7,17 @@ import {
   Loader2,
   AlertCircle,
   Search,
-  ListFilter,
   X,
   Eye,
   EyeOff,
   ChevronDown,
   ChevronRight,
-  RefreshCw,
   ClipboardPaste,
 } from 'lucide-react'
 import {
   DEFAULT_GRAPH_VERSION,
   MAX_COMMENTS,
   fetchComments,
-  fetchRecentPosts,
   parseCommentsJson,
   downloadCSV,
   toTSV,
@@ -80,11 +77,6 @@ export default function FbCommentsPage() {
   const [uniqueOnly, setUniqueOnly] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pageUrl, setPageUrl] = useState('')
-  const [posts, setPosts] = useState([])
-  const [pickerLoading, setPickerLoading] = useState(false)
-  const [pickerError, setPickerError] = useState(null)
 
   const [jsonOpen, setJsonOpen] = useState(false)
   const [jsonText, setJsonText] = useState('')
@@ -170,27 +162,6 @@ export default function FbCommentsPage() {
     abortRef.current?.abort()
     abortRef.current = null
     setLoading(false)
-  }
-
-  async function handleLoadPosts() {
-    setPickerLoading(true)
-    setPickerError(null)
-    try {
-      const list = await fetchRecentPosts({ input: pageUrl, token, version: graphVersion })
-      setPosts(list)
-      if (!list.length) setPickerError({ message: 'ไม่เจอโพสต์ในเพจนี้' })
-    } catch (err) {
-      setPickerError({ message: err?.message || 'โหลดโพสต์ไม่สำเร็จ', hint: err?.hint })
-      setPosts([])
-    } finally {
-      setPickerLoading(false)
-    }
-  }
-
-  function handlePickPost(post) {
-    setPostUrl(post.id)
-    setPickerOpen(false)
-    handleFetch(post.id)
   }
 
   function handleParseJson() {
@@ -331,13 +302,6 @@ export default function FbCommentsPage() {
             รวมคอมเม้นตอบกลับ (reply) ด้วย
           </label>
           <button
-            onClick={() => setPickerOpen(!pickerOpen)}
-            className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
-          >
-            <ListFilter className="w-4 h-4" />
-            เลือกจากโพสต์ล่าสุดของเพจ
-          </button>
-          <button
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 ml-auto"
           >
@@ -377,57 +341,6 @@ export default function FbCommentsPage() {
                 className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
               />
             </div>
-          </div>
-        )}
-
-        {/* Post picker */}
-        {pickerOpen && (
-          <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-3">
-            <p className="text-xs text-slate-500">
-              ใช้เมื่อไม่มีลิงก์โพสต์อยู่ในมือ หรือระบบหาโพสต์จากลิงก์ไม่เจอ — ใส่ลิงก์เพจแล้วเลือกโพสต์จากรายการ
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={pageUrl}
-                onChange={(e) => setPageUrl(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !pickerLoading && handleLoadPosts()}
-                placeholder="https://www.facebook.com/ชื่อเพจ หรือ Page ID"
-                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
-              />
-              <button
-                onClick={handleLoadPosts}
-                disabled={pickerLoading}
-                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-100 disabled:opacity-60 flex items-center justify-center gap-2"
-              >
-                {pickerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                โหลดโพสต์
-              </button>
-            </div>
-            {pickerError && (
-              <p className="text-xs text-red-600">
-                {pickerError.message}
-                {pickerError.hint ? ` — ${pickerError.hint}` : ''}
-              </p>
-            )}
-            {posts.length > 0 && (
-              <ul className="max-h-64 overflow-y-auto divide-y divide-slate-200 bg-white rounded-lg border border-slate-200">
-                {posts.map((post) => (
-                  <li key={post.id}>
-                    <button
-                      onClick={() => handlePickPost(post)}
-                      className="w-full text-left px-3 py-2 hover:bg-primary-50"
-                    >
-                      <p className="text-sm text-slate-800 line-clamp-2">{post.message}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {formatDate(post.createdTime)}
-                        {post.commentCount !== null ? ` · ${post.commentCount} คอมเม้น` : ''}
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         )}
       </div>

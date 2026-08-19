@@ -43,7 +43,7 @@ function translateGraphError(error) {
   }
   if (code === 100) {
     return new FacebookError('Facebook หาโพสต์นี้ไม่เจอ หรือ ID ไม่ถูกต้อง', {
-      hint: 'ลองใช้ปุ่ม "เลือกจากโพสต์ล่าสุดของเพจ" เพื่อหยิบ ID ที่ถูกต้อง (ลิงก์แบบ pfbid ใช้กับ Graph API ไม่ได้)',
+      hint: 'เปิดโพสต์บน Facebook แล้วคัดลอกลิงก์ใหม่อีกครั้ง หรือวาง Post ID ที่เป็นตัวเลขแทน',
       code,
       raw,
     })
@@ -117,7 +117,7 @@ export function parsePostTarget(raw) {
     if (owner) return { pageRef: owner, pfbid }
     return {
       error: 'ลิงก์นี้ไม่มีชื่อเพจอยู่ในลิงก์ ระบบเลยหาโพสต์ให้ไม่ได้',
-      hint: 'ใช้ปุ่ม "เลือกจากโพสต์ล่าสุดของเพจ" แล้วเลือกโพสต์ที่ต้องการ',
+      hint: 'เปิดโพสต์บน Facebook แล้วคัดลอกลิงก์ใหม่อีกครั้ง หรือวาง Post ID ที่เป็นตัวเลขแทน',
     }
   }
 
@@ -130,7 +130,7 @@ export function parsePostTarget(raw) {
     if (!postId) {
       return {
         error: 'หา Post ID ที่เป็นตัวเลขในลิงก์ไม่เจอ',
-        hint: 'ใช้ปุ่ม "เลือกจากโพสต์ล่าสุดของเพจ" หรือวาง Post ID เป็นตัวเลขเอง',
+        hint: 'เปิดโพสต์บน Facebook แล้วคัดลอกลิงก์ใหม่อีกครั้ง หรือวาง Post ID ที่เป็นตัวเลขแทน',
       }
     }
     const pageRef = idx > 0 ? decodeURIComponent(segments[0]) : null
@@ -144,33 +144,6 @@ export function parsePostTarget(raw) {
     error: 'อ่านลิงก์นี้ไม่ออก',
     hint: 'รองรับลิงก์แบบ /posts/, /videos/, /photos/, /reel/, permalink.php และการวาง Post ID ตรงๆ',
   }
-}
-
-// ดึงชื่อเพจ/ID จากลิงก์เพจ เพื่อใช้ list โพสต์ล่าสุด
-export function parsePageRef(raw) {
-  const input = (raw || '').trim()
-  if (!input) return { error: 'ยังไม่ได้ใส่ลิงก์เพจ' }
-  if (/^\d+$/.test(input)) return { pageRef: input }
-  if (/^[A-Za-z0-9._-]+$/.test(input) && !input.includes('.com')) return { pageRef: input }
-
-  let url
-  try {
-    url = new URL(input.startsWith('http') ? input : `https://${input}`)
-  } catch {
-    return { error: 'รูปแบบลิงก์เพจไม่ถูกต้อง' }
-  }
-  if (!FB_HOSTS.test(url.hostname)) return { error: 'ลิงก์นี้ไม่ใช่ลิงก์ของ Facebook' }
-
-  const idFromQuery = url.searchParams.get('id')
-  if (idFromQuery && /^\d+$/.test(idFromQuery)) return { pageRef: idFromQuery }
-
-  const segments = url.pathname.split('/').filter(Boolean)
-  if (segments[0] === 'profile.php' || segments[0] === 'people') {
-    return { error: 'ลิงก์นี้เป็นโปรไฟล์ส่วนตัว ไม่ใช่เพจ', hint: 'ใส่ลิงก์เพจ เช่น facebook.com/ชื่อเพจ หรือใส่ Page ID เป็นตัวเลข' }
-  }
-  const first = segments[0] ? decodeURIComponent(segments[0]) : ''
-  if (!first || first.startsWith('pfbid')) return { error: 'หาชื่อเพจในลิงก์ไม่เจอ' }
-  return { pageRef: first }
 }
 
 // === GRAPH API ===
@@ -235,7 +208,7 @@ async function resolvePfbid({ pageRef, pfbid }, options) {
   }
 
   throw new FacebookError(`หาโพสต์จากลิงก์นี้ไม่เจอในโพสต์ ${scanned} รายการล่าสุดของเพจ`, {
-    hint: 'ถ้าเป็นโพสต์เก่ามาก ให้ใช้ปุ่ม "เลือกจากโพสต์ล่าสุดของเพจ" แล้วเลือกเอง',
+    hint: 'ถ้าเป็นโพสต์เก่ากว่านั้น ให้วาง Post ID ที่เป็นตัวเลขแทน',
   })
 }
 
@@ -246,7 +219,7 @@ export async function resolveObjectId(target, options) {
   const page = await graph(encodeURIComponent(target.pageRef), { fields: 'id' }, options)
   if (!page?.id) {
     throw new FacebookError('หา Page ID จากชื่อเพจในลิงก์ไม่เจอ', {
-      hint: 'ลองวาง Post ID เป็นตัวเลขแทน หรือใช้ปุ่มเลือกจากโพสต์ล่าสุดของเพจ',
+      hint: 'ลองวาง Post ID ที่เป็นตัวเลขแทน',
     })
   }
   return `${page.id}_${target.postId}`
@@ -315,28 +288,6 @@ export async function fetchComments({
 
   onProgress?.(comments.length)
   return { objectId, comments, truncated }
-}
-
-// ดึงโพสต์ล่าสุดของเพจ เอาไว้ให้ผู้ใช้เลือกเมื่อลิงก์เป็นแบบ pfbid
-export async function fetchRecentPosts({ input, token, version = DEFAULT_GRAPH_VERSION, limit = 25, signal }) {
-  const parsed = parsePageRef(input)
-  if (parsed.error) throw new FacebookError(parsed.error, { hint: parsed.hint })
-
-  const res = await graph(
-    `${encodeURIComponent(parsed.pageRef)}/posts`,
-    {
-      fields: 'id,message,created_time,permalink_url,comments.summary(true).limit(0)',
-      limit,
-    },
-    { token, version, signal }
-  )
-  return (res?.data || []).map((post) => ({
-    id: post.id,
-    message: (post.message || '(โพสต์ไม่มีข้อความ)').replace(/\s+/g, ' ').slice(0, 120),
-    createdTime: post.created_time || '',
-    permalink: post.permalink_url || '',
-    commentCount: post.comments?.summary?.total_count ?? null,
-  }))
 }
 
 // === MANUAL JSON (โหมดสำรอง: คัดลอกผลลัพธ์จาก Graph API Explorer มาวาง) ===
