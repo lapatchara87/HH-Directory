@@ -11,6 +11,7 @@ import BookmarksPage from './pages/BookmarksPage'
 import RecentPage from './pages/RecentPage'
 import DirectoryPage from './pages/DirectoryPage'
 import TagsPage from './pages/TagsPage'
+import FbCommentsPage from './pages/FbCommentsPage'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }) {
@@ -44,6 +45,7 @@ export default function App() {
                   <Route path="/bookmarks" element={<BookmarksPage />} />
                   <Route path="/tags" element={<TagsPage />} />
                   <Route path="/recent" element={<RecentPage />} />
+                  <Route path="/fb-comments" element={<FbCommentsPage />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/:tab" element={<AdminPage />} />
